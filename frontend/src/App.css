@@ -476,6 +476,34 @@ button:disabled { cursor: wait; opacity: .65; }
 .boot-stage > p i { width: 3px; height: 3px; background: #d6a45c; border-radius: 50%; box-shadow: 0 0 8px rgba(214, 164, 92, .7); }
 .spin { animation: rotate 1s linear infinite; }
 
+.signout-screen { position: fixed; z-index: 100; inset: 0; display: grid; overflow: hidden; place-items: center; padding: 24px; color: #e8e5de; background: radial-gradient(ellipse at 50% 41%, rgba(202, 151, 74, .13), transparent 33%), radial-gradient(ellipse at 50% 110%, rgba(216, 65, 80, .08), transparent 48%), #090a0d; }
+.signout-screen::before { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 42px 42px; mask-image: radial-gradient(ellipse at center, #000 4%, transparent 76%); content: ''; }
+.signout-stage { position: relative; display: flex; width: min(440px, 100%); flex-direction: column; align-items: center; animation: signout-arrive .42s cubic-bezier(.2,.8,.2,1) both; }
+.signout-emblem { position: relative; display: grid; width: 116px; aspect-ratio: 1; place-items: center; margin-bottom: 31px; }
+.signout-emblem > img { width: 48px; height: 48px; object-fit: contain; filter: drop-shadow(0 0 17px rgba(237, 187, 109, .36)); animation: signout-mark 2.2s ease-in-out infinite alternate; }
+.signout-orbit { position: absolute; inset: 0; border: 1px solid rgba(232, 192, 124, .23); border-radius: 50%; }
+.signout-orbit::after { position: absolute; top: 12%; left: 17%; width: 5px; height: 5px; background: #ffe2a2; border-radius: 50%; box-shadow: 0 0 12px 3px rgba(255, 205, 116, .6); content: ''; }
+.signout-orbit-one { animation: signout-orbit 7.2s linear infinite; }
+.signout-orbit-two { inset: -11px; border-style: dashed; opacity: .42; animation: signout-orbit 11s linear infinite reverse; }
+.signout-orbit-two::after { top: auto; right: 12%; bottom: 19%; left: auto; width: 4px; height: 4px; background: #fa6976; box-shadow: 0 0 10px 3px rgba(240, 68, 82, .48); }
+.signout-lock { position: absolute; right: 1px; bottom: 1px; display: grid; width: 30px; height: 30px; place-items: center; color: #a9dfbd; background: #111813; border: 1px solid rgba(112, 207, 150, .34); border-radius: 50%; box-shadow: 0 0 24px rgba(112, 207, 150, .12); animation: signout-lock  .35s .24s cubic-bezier(.2,.8,.2,1) both; }
+.signout-kicker { display: flex; align-items: center; gap: 10px; margin: 0 0 17px; color: #b99b69; font: 9px var(--mono); letter-spacing: 1.7px; }
+.signout-kicker i { width: 4px; height: 4px; background: #e3b96f; border-radius: 50%; box-shadow: 0 0 9px rgba(227,185,111,.8); }
+.signout-stage h1 { margin: 0; color: #f0eee9; font: 600 38px/1.08 var(--display); text-align: center; }
+.signout-stage h1 em { color: #ef737d; font-style: normal; }
+.signout-status { display: flex; width: min(300px, 100%); justify-content: space-between; gap: 12px; margin-top: 31px; color: #777982; font: 8px var(--mono); letter-spacing: .55px; }
+.signout-status span { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.signout-status span:first-child i { width: 5px; height: 5px; background: #75c495; border-radius: 50%; box-shadow: 0 0 8px rgba(117,196,149,.7); }
+.signout-progress { width: min(300px, 100%); height: 2px; overflow: hidden; margin-top: 11px; background: rgba(255,255,255,.1); }
+.signout-progress span { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, #dfa95e, #f4d28c, #ee6976); transform: scaleX(0); transform-origin: left; animation: signout-progress 6.85s .05s cubic-bezier(.4,0,.2,1) both; }
+.signout-foot { margin: 20px 0 0; color: #575962; font: 8px var(--mono); letter-spacing: 1.15px; }
+.signout-foot b { padding: 0 5px; color: #bb626a; }
+@keyframes signout-arrive { from { opacity: 0; transform: translateY(9px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes signout-mark { to { transform: scale(1.06); filter: drop-shadow(0 0 24px rgba(237, 187, 109, .62)); } }
+@keyframes signout-orbit { to { transform: rotate(360deg); } }
+@keyframes signout-lock { from { opacity: 0; transform: scale(.55) rotate(-24deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+@keyframes signout-progress { to { transform: scaleX(1); } }
+
 @keyframes rotate { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .4; } }
 @keyframes blink { to { visibility: hidden; } }
@@ -672,6 +700,8 @@ button:disabled { cursor: wait; opacity: .65; }
   .page-heading h1 { font-size: 23px; }
   .stat-value { font-size: 24px; }
   .auth-content h1 { font-size: 40px; }
+  .signout-stage h1 { font-size: 34px; }
+  .signout-status { font-size: 7px; }
   .quick-actions { grid-template-columns: 1fr 1fr; }
   .success-backdrop { padding: 14px; }
 }

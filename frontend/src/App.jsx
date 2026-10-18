@@ -45,6 +45,7 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [welcome, setWelcome] = useState(null)
   const [booting, setBooting] = useState(true)
+  const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setBooting(false), 1450)
@@ -111,7 +112,17 @@ function App() {
     clearToken()
     setToken(null)
     setUser(null)
-    setAuthError(message)
+    setAuthError(typeof message === 'string' ? message : '')
+  }, [])
+
+  const signOut = useCallback(() => {
+    clearToken()
+    setToken(null)
+    setUser(null)
+    setAuthError('')
+    setSigningOut(true)
+    const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 120 : 7000
+    window.setTimeout(() => setSigningOut(false), duration)
   }, [])
 
   useEffect(() => {
@@ -171,8 +182,27 @@ function App() {
       <p><i /> ESTABLISHING PRIVATE NETWORK <i /></p>
     </div>
   </main>
+  if (signingOut) return <SignOutScreen />
   if (!token || !user) return <AuthScreen health={health} healthError={healthError} initialError={authError} onSignedIn={handleSignedIn} />
-  return <Dashboard user={user} health={health} healthError={healthError} initialSuccess={welcome} onLogout={logout} />
+  return <Dashboard user={user} health={health} healthError={healthError} initialSuccess={welcome} onLogout={logout} onSignOut={signOut} />
+}
+
+function SignOutScreen() {
+  return <main className="signout-screen" role="status" aria-live="polite">
+    <div className="signout-stage">
+      <div className="signout-emblem" aria-hidden="true">
+        <span className="signout-orbit signout-orbit-one" />
+        <span className="signout-orbit signout-orbit-two" />
+        <img src="/rere-cloud-mark.svg" alt="" />
+        <span className="signout-lock"><ShieldCheck size={17} /></span>
+      </div>
+      <p className="signout-kicker"><i /> SECURE SESSION <i /></p>
+      <h1>Leaving your<br /><em>workspace.</em></h1>
+      <div className="signout-status"><span><i /> CREDENTIAL CLEARED</span><span>SESSION CLOSED</span></div>
+      <div className="signout-progress"><span /></div>
+      <p className="signout-foot">RERE CLOUD <b>·</b> PRIVATE NETWORK</p>
+    </div>
+  </main>
 }
 
 function Brand({ compact = false }) {
@@ -274,7 +304,7 @@ function SuccessOverlay({ title, message, tone = 'private', onDone }) {
   </div>
 }
 
-function Dashboard({ user, health, healthError, initialSuccess, onLogout }) {
+function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSignOut }) {
   const [section, setSection] = useState('overview')
   const [mobileNav, setMobileNav] = useState(false)
   const [data, setData] = useState(EMPTY_DATA)
@@ -359,7 +389,7 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout }) {
       </nav>
       <div className="sidebar-bottom">
         <div className="storage-panel"><div className="storage-icon"><Terminal size={16} /></div><div><strong>Workspace</strong><span>{data.stats ? `${data.stats.projects?.total ?? 0} projects · ${data.stats.notes?.total ?? 0} notes` : 'Personal environment'}</span></div><MoreHorizontal size={17} /></div>
-        <div className="profile-row"><div className="avatar">{initials(user)}</div><div className="profile-copy"><strong>{user.first_name} {user.last_name}</strong><span>@{user.username}</span></div><button className="icon-button logout-button" title="Sign out" aria-label="Sign out" onClick={onLogout}><LogOut size={16} /></button></div>
+        <div className="profile-row"><div className="avatar">{initials(user)}</div><div className="profile-copy"><strong>{user.first_name} {user.last_name}</strong><span>@{user.username}</span></div><button className="icon-button logout-button" title="Sign out" aria-label="Sign out" onClick={onSignOut}><LogOut size={16} /></button></div>
       </div>
     </aside>
     {mobileNav && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}

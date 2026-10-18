@@ -42,8 +42,16 @@ for media_folder in ("images", "videos", "documents", "other", "thumbnails"):
 if not app.config["SECRET_KEY"]:
     raise RuntimeError("Set SECRET_KEY in your .env file.")
 
-frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
-CORS(app, resources={r"/api/*": {"origins": [frontend_origin]}})
+frontend_origins = [
+    "http://localhost:5173",
+    "https://fernando-exe.vercel.app",
+    *[
+        origin.strip()
+        for origin in os.getenv("FRONTEND_ORIGIN", "").split(",")
+        if origin.strip()
+    ],
+]
+CORS(app, resources={r"/api/*": {"origins": frontend_origins}})
 
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
