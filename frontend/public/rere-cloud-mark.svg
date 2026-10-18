@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="gold" x1="106" y1="82" x2="407" y2="424" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff3bf"/><stop offset=".35" stop-color="#f0be67"/><stop offset=".7" stop-color="#c87a32"/><stop offset="1" stop-color="#ffe7a0"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="214" y1="158" x2="310" y2="363" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#291b10"/><stop offset="1" stop-color="#08090c"/>
+    </linearGradient>
+    <filter id="shadow" x="20" y="25" width="472" height="452" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity=".75"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <path d="M148 403h-25c-50 0-82-33-82-79 0-42 31-74 77-79 4-52 45-91 98-91 21-44 61-70 111-70 57 0 102 37 112 92 52 2 93 40 96 90 38 11 62 42 62 78 0 35-30 59-70 59H148Z" transform="translate(-42 0)" fill="#111116" stroke="url(#gold)" stroke-width="10"/>
+    <path d="m256 112 101 32v87c0 73-39 123-101 157-62-34-101-84-101-157v-87l101-32Z" fill="#b87535" stroke="#fff0b0" stroke-width="10"/>
+    <path d="m256 130 83 27v74c0 59-30 99-83 130-53-31-83-71-83-130v-74l83-27Z" fill="url(#shield)" stroke="#402916" stroke-width="5"/>
+    <text x="256" y="302" fill="url(#gold)" font-family="Georgia, 'Times New Roman', serif" font-size="143" font-weight="700" text-anchor="middle" paint-order="stroke" stroke="#9f652b" stroke-width="3">R</text>
+  </g>
+</svg>

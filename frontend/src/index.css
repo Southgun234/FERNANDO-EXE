@@ -1,0 +1,4 @@
+html { min-width: 320px; min-height: 100%; background: #090a0d; scroll-behavior: smooth; }
+body { min-width: 320px; min-height: 100vh; margin: 0; }
+button { -webkit-tap-highlight-color: transparent; }
+input, textarea, select { color-scheme: dark; }

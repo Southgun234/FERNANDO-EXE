@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 683 427" fill="none">
+  <defs>
+    <linearGradient id="gold" x1="130" y1="30" x2="500" y2="305" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff3bf"/>
+      <stop offset=".24" stop-color="#f4c66f"/>
+      <stop offset=".52" stop-color="#fff0b0"/>
+      <stop offset=".78" stop-color="#c87a32"/>
+      <stop offset="1" stop-color="#ffe7a0"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="280" y1="82" x2="405" y2="290" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#26180e"/>
+      <stop offset=".5" stop-color="#08090c"/>
+      <stop offset="1" stop-color="#331b0e"/>
+    </linearGradient>
+    <linearGradient id="word" x1="115" y1="330" x2="570" y2="410" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff1ba"/>
+      <stop offset=".38" stop-color="#dca34e"/>
+      <stop offset=".65" stop-color="#fff0b5"/>
+      <stop offset="1" stop-color="#c88339"/>
+    </linearGradient>
+    <filter id="glow" x="20" y="0" width="643" height="325" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="shadow" x="0" y="0" width="683" height="427" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000" flood-opacity=".8"/>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" opacity=".45">
+    <path d="M174 280h-39c-39 0-67-27-67-64 0-35 27-62 65-66 3-43 37-75 80-75 17-36 50-57 91-57 47 0 84 31 92 77 43 1 77 33 80 74 31 9 51 34 51 65 0 29-24 46-58 46H174Z" stroke="#efb75d" stroke-width="20"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="M174 280h-39c-39 0-67-27-67-64 0-35 27-62 65-66 3-43 37-75 80-75 17-36 50-57 91-57 47 0 84 31 92 77 43 1 77 33 80 74 31 9 51 34 51 65 0 29-24 46-58 46H174Z" fill="#111116" fill-opacity=".94" stroke="url(#gold)" stroke-width="8"/>
+    <path d="M89 208h97l27-20 24 2 24-22M77 232h91l24-16h38M135 130h58l20 18h31M189 89h36l17 21h23M502 208h-93l-27-20-24 2-24-22M514 232h-91l-24-16h-38M456 130h-58l-20 18h-31M402 89h-36l-17 21h-23" stroke="url(#gold)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M101 208h10m-22 24h12m49-102h12m51-41h12m377 119h-10m22 24h-12m-49-102h-12m-51-41h-12" stroke="#f6c873" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="121" cy="208" r="6" fill="#ffe2a0"/><circle cx="111" cy="232" r="6" fill="#e8a858"/>
+    <circle cx="179" cy="130" r="6" fill="#ffe2a0"/><circle cx="237" cy="89" r="6" fill="#e8a858"/>
+    <circle cx="472" cy="208" r="6" fill="#ffe2a0"/><circle cx="482" cy="232" r="6" fill="#e8a858"/>
+    <circle cx="414" cy="130" r="6" fill="#ffe2a0"/><circle cx="356" cy="89" r="6" fill="#e8a858"/>
+    <path d="M341 70 421 95v70c0 58-31 98-80 125-49-27-80-67-80-125V95l80-25Z" fill="#b87535" stroke="#fff0b0" stroke-width="8"/>
+    <path d="M341 83 409 104v61c0 48-24 81-68 106-44-25-68-58-68-106v-61l68-21Z" fill="url(#shield)" stroke="#3a2514" stroke-width="4"/>
+    <path d="M324 126h34c26 0 42 15 42 38 0 17-9 29-24 35l30 39h-32l-25-35h-11v35h-28v-112h14Zm14 23v31h17c10 0 16-5 16-16s-6-15-17-15h-16Z" fill="url(#gold)" stroke="#a56d31" stroke-width="1.5"/>
+    <path d="M341 70v-20m0 0v-9m0 9h-18m18 0h18" stroke="url(#gold)" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="341" cy="39" r="5" fill="#ffe8a6"/>
+  </g>
+  <text x="341" y="404" fill="url(#word)" font-family="Georgia, 'Times New Roman', serif" font-size="83" font-weight="700" letter-spacing="1" text-anchor="middle" paint-order="stroke" stroke="#59371b" stroke-width="2">Rere Cloud</text>
+</svg>
