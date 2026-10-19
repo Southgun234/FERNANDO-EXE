@@ -116,10 +116,34 @@ export const api = {
   stats: () => request('/api/dashboard/stats'),
   projects: resource('projects'),
   expenses: resource('expenses'),
+  finance: {
+    accounts: {
+      list: () => request('/api/finance/accounts'),
+      create: (body) => request('/api/finance/accounts', json('POST', body)),
+      remove: (id) => request(`/api/finance/accounts/${id}`, { method: 'DELETE' }),
+    },
+    categories: {
+      list: () => request('/api/finance/categories'),
+      create: (body) => request('/api/finance/categories', json('POST', body)),
+    },
+    budgets: {
+      list: () => request('/api/finance/budgets'),
+      create: (body) => request('/api/finance/budgets', json('POST', body)),
+      remove: (id) => request(`/api/finance/budgets/${id}`, { method: 'DELETE' }),
+    },
+    goals: {
+      list: () => request('/api/finance/goals'),
+      create: (body) => request('/api/finance/goals', json('POST', body)),
+      remove: (id) => request(`/api/finance/goals/${id}`, { method: 'DELETE' }),
+      contribute: (id, body) => request(`/api/finance/goals/${id}/contributions`, json('POST', body)),
+    },
+  },
   tasks: resource('tasks'),
   notes: resource('notes'),
   family: {
     members: () => request('/api/family/members'),
+    createInvite: () => request('/api/family/invites', json('POST', {})),
+    join: (code) => request('/api/family/join', json('POST', { code })),
   },
   files: {
     list: () => request('/api/files'),

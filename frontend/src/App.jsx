@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   Activity, ArrowRight, ArrowUpRight, Bell, Blocks, BriefcaseBusiness,
-  Check, ChevronDown, CircleHelp, CreditCard, FileText, Folder, FolderKanban,
+  Check, ChevronDown, CircleHelp, Copy, CreditCard, FileText, Folder, FolderKanban,
   LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, MoreHorizontal, Plus, Search,
   Settings2, ShieldCheck, Terminal, Upload, Wallet, X,
 } from 'lucide-react'
@@ -13,11 +13,29 @@ const NAV_ITEMS = [
   { id: 'projects', label: 'Projects', group: 'MANAGE', icon: FolderKanban },
   { id: 'finance', label: 'Finance', group: 'MANAGE', icon: Wallet },
   { id: 'workspace', label: 'Workspace', group: 'PERSONAL', icon: Blocks },
-  { id: 'cloud', label: 'Family Cloud', group: 'PERSONAL', icon: Folder },
+  { id: 'cloud', label: 'Photos & Videos', group: 'PERSONAL', icon: Folder },
 ]
 
-const EMPTY_DATA = { projects: [], expenses: [], tasks: [], notes: [], files: [], familyMembers: [], stats: null }
+const EMPTY_DATA = { projects: [], expenses: [], tasks: [], notes: [], files: [], familyMembers: [], financeAccounts: [], financeCategories: [], budgets: [], goals: [], stats: null }
 const STATUSES = ['active', 'completed', 'on_hold', 'archived']
+const OCCUPATIONS = [
+  { value: 'student', label: 'Student' },
+  { value: 'employed', label: 'Employed' },
+  { value: 'self_employed', label: 'Self-employed' },
+  { value: 'homemaker', label: 'Homemaker' },
+  { value: 'caregiver', label: 'Caregiver' },
+  { value: 'retired', label: 'Retired' },
+  { value: 'other', label: 'Other' },
+]
+const OCCUPATION_PROFILES = {
+  student: { title: 'Your study dashboard', subtitle: 'Keep learning, deadlines, projects, and personal finances in view.', projects: 'Study and personal projects', projectAction: 'New study project', taskAction: 'Study task', taskHint: 'Keep your next deadline close', priority: ['Open tasks', 'Total projects', 'Recorded expenses', 'Active projects'] },
+  employed: { title: 'Your work and life dashboard', subtitle: 'Balance work priorities, personal projects, and household finances.', projects: 'Work and personal projects', projectAction: 'New work project', taskAction: 'Work task', taskHint: 'Capture your next work priority', priority: ['Active projects', 'Open tasks', 'Recorded expenses', 'Total projects'] },
+  self_employed: { title: 'Your business dashboard', subtitle: 'Keep projects, tasks, and business spending visible in one place.', projects: 'Business and personal projects', projectAction: 'New business project', taskAction: 'Business task', taskHint: 'Move your next project forward', priority: ['Total projects', 'Recorded expenses', 'Open tasks', 'Active projects'] },
+  homemaker: { title: 'Your household dashboard', subtitle: 'Coordinate household projects, family tasks, and everyday spending.', projects: 'Household and personal projects', projectAction: 'New household project', taskAction: 'Family task', taskHint: 'Keep a household task in view', priority: ['Open tasks', 'Recorded expenses', 'Total projects', 'Active projects'] },
+  caregiver: { title: 'Your care and home dashboard', subtitle: 'Keep care-related tasks, projects, and household spending organized.', projects: 'Care and household projects', projectAction: 'New care project', taskAction: 'Care task', taskHint: 'Keep the next care task close', priority: ['Open tasks', 'Recorded expenses', 'Active projects', 'Total projects'] },
+  retired: { title: 'Your personal dashboard', subtitle: 'Stay on top of personal projects, plans, and everyday finances.', projects: 'Personal projects', projectAction: 'New personal project', taskAction: 'Personal task', taskHint: 'Keep a plan moving forward', priority: ['Recorded expenses', 'Open tasks', 'Total projects', 'Active projects'] },
+  other: { title: 'Your personal dashboard', subtitle: 'Here’s what’s happening across your workspace.', projects: 'Recent projects', projectAction: 'New project', taskAction: 'Create task', taskHint: 'Capture a next step', priority: ['Total projects', 'Active projects', 'Open tasks', 'Recorded expenses'] },
+}
 
 function friendlyDate(value) {
   if (!value) return 'No date'
@@ -219,7 +237,7 @@ function HealthPill({ health, detail = '' }) {
 
 function AuthScreen({ health, healthError, initialError, onSignedIn }) {
   const [mode, setMode] = useState('signin')
-  const [form, setForm] = useState({ first_name: '', last_name: '', username: '', email: '', phone: '+254', password: '' })
+  const [form, setForm] = useState({ first_name: '', last_name: '', username: '', email: '', phone: '+254', occupation: '', password: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(initialError)
   const [notice, setNotice] = useState('')
@@ -232,7 +250,7 @@ function AuthScreen({ health, healthError, initialError, onSignedIn }) {
     setNotice('')
     if (!form.username.trim() || !form.password) return setError('Enter your username and password.')
     if (mode === 'signup') {
-      if (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim() || !form.phone.trim()) return setError('Complete every field to create your account.')
+      if (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim() || !form.phone.trim() || !form.occupation) return setError('Complete every field to create your account.')
       if (form.password.length < 8) return setError('Password must be at least 8 characters.')
     }
     setBusy(true)
@@ -270,6 +288,7 @@ function AuthScreen({ health, healthError, initialError, onSignedIn }) {
         {mode === 'signup' && <>
           <Field label="Email address" name="email" type="email" value={form.email} onChange={update} autoComplete="email" />
           <Field label="Kenyan phone number" name="phone" type="tel" value={form.phone} onChange={update} autoComplete="tel" />
+          <Field label="Occupation" name="occupation" type="select" value={form.occupation} onChange={update} options={OCCUPATIONS} />
         </>}
         <Field label="Password" name="password" type="password" value={form.password} onChange={update} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} />
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -283,8 +302,8 @@ function AuthScreen({ health, healthError, initialError, onSignedIn }) {
   </main>
 }
 
-function Field({ label, name, type = 'text', value, onChange, autoComplete, required = true, placeholder }) {
-  return <label className="field"><span>{label}</span><input name={name} type={type} value={value} onChange={onChange} autoComplete={autoComplete} placeholder={placeholder} required={required} /></label>
+function Field({ label, name, type = 'text', value, onChange, autoComplete, required = true, placeholder, options = [] }) {
+  return <label className="field"><span>{label}</span>{type === 'select' ? <select name={name} value={value} onChange={onChange} required={required}><option value="">Select occupation</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : <input name={name} type={type} value={value} onChange={onChange} autoComplete={autoComplete} placeholder={placeholder} required={required} />}</label>
 }
 
 function SuccessOverlay({ title, message, tone = 'private', onDone }) {
@@ -313,12 +332,15 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
   const [dialog, setDialog] = useState(null)
   const [toast, setToast] = useState('')
   const [success, setSuccess] = useState(initialSuccess)
+  const [saving, setSaving] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     let active = true
     const entries = [
       ['stats', api.stats()], ['projects', api.projects.list()], ['expenses', api.expenses.list()],
+      ['financeAccounts', api.finance.accounts.list()], ['financeCategories', api.finance.categories.list()],
+      ['budgets', api.finance.budgets.list()], ['goals', api.finance.goals.list()],
       ['tasks', api.tasks.list()], ['notes', api.notes.list()], ['files', api.files.list()],
       ['familyMembers', api.family.members()],
     ]
@@ -334,6 +356,10 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
         else if (key === 'stats') next[key] = result
         else if (key === 'files') next[key] = result?.files || []
         else if (key === 'familyMembers') next[key] = result?.members || []
+        else if (key === 'financeAccounts') next[key] = result?.accounts || []
+        else if (key === 'financeCategories') next[key] = result?.categories || []
+        else if (key === 'budgets') next[key] = result?.budgets || []
+        else if (key === 'goals') next[key] = result?.goals || []
         else next[key] = result?.[key] || []
       }
       setData(next)
@@ -354,18 +380,29 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
   }, [section])
 
   async function saveResource(resource, value, item) {
-    const service = api[resource]
-    if (item) await service.update(item.id, value)
-    else await service.create(value)
-    setDialog(null)
-    refresh()
-    celebrate(`${resourceLabel(resource)} ${item ? 'updated' : 'created'}`, 'Saved to your private workspace.', resource === 'notes' || resource === 'tasks' ? 'workspace' : resource)
+    const service = api[resource] || api.finance[resource]
+    setSaving({ phase: 'uploading', label: 'Save', name: `${item ? 'Updating' : 'Creating'} ${resourceLabel(resource).toLowerCase()}` })
+    try {
+      if (item) await service.update(item.id, value)
+      else await service.create(value)
+      setSaving({ phase: 'success', label: 'Save', name: `${resourceLabel(resource)} saved` })
+      await new Promise((resolve) => window.setTimeout(resolve, 700))
+      setSaving(null)
+      setDialog(null)
+      refresh()
+      celebrate(`${resourceLabel(resource)} ${item ? 'updated' : 'created'}`, 'Saved to your private workspace.', resource === 'notes' || resource === 'tasks' ? 'workspace' : resource)
+    } catch (error) {
+      setSaving(null)
+      throw error
+    }
   }
 
   async function deleteResource(resource, item) {
-    if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return
+    const itemName = item.title || item.name || item.category || 'this record'
+    if (!window.confirm(`Delete "${itemName}"? This cannot be undone.`)) return
     try {
-      await api[resource].remove(item.id)
+      const service = api[resource] || api.finance[resource]
+      await service.remove(item.id)
       refresh()
       celebrate(`${resourceLabel(resource)} deleted`, 'Your workspace is up to date.', resource === 'notes' || resource === 'tasks' ? 'workspace' : resource)
     } catch (error) { notify(error.message) }
@@ -375,9 +412,26 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
   const todayLabel = new Intl.DateTimeFormat('en-KE', { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()
   const openCreate = (resource) => setDialog({ resource, item: null })
   const openEdit = (resource, item) => setDialog({ resource, item })
+  async function contributeToGoal(goal, accountId, amount) {
+    setSaving({ phase: 'uploading', label: 'Save', name: `Allocating to ${goal.title}` })
+    try {
+      const result = await api.finance.goals.contribute(goal.id, { account_id: Number(accountId), amount: Number(amount) })
+      setSaving({ phase: 'success', label: 'Save', name: `+${result.xp_earned} XP earned` })
+      await new Promise((resolve) => window.setTimeout(resolve, 800))
+      setSaving(null)
+      refresh()
+      celebrate('Contribution saved', `${result.xp_earned} XP added to ${goal.title}.`, 'finance')
+    } catch (error) {
+      setSaving(null)
+      notify(error.message)
+    }
+  }
   const selectSection = (value) => { setSection(value); setMobileNav(false) }
 
-  return <div className="app-shell" data-section={section}>
+  const occupation = OCCUPATION_PROFILES[user.occupation] ? user.occupation : 'other'
+  const occupationProfile = OCCUPATION_PROFILES[occupation]
+
+  return <div className="app-shell" data-section={section} data-occupation={occupation.replaceAll('_', '-')}>
     <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
       <div className="sidebar-head"><Brand /><button className="icon-button sidebar-close" aria-label="Close navigation" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
       <div className="system-state"><span className="status-dot" /><span>SYSTEM ONLINE</span><span className="system-version">v1.0.4</span></div>
@@ -399,26 +453,27 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
         <div className="topbar-right"><HealthPill health={health} detail={healthError} /><span className="topbar-divider" /><button className="icon-button notification-button" aria-label="Notifications" title="Notifications" onClick={() => notify('No new notifications.')}><Bell size={17} /></button><div className="topbar-avatar" title={`${user.first_name} ${user.last_name}`}>{initials(user)}</div></div>
       </header>
       <div className="page-content">
-        <div className="page-heading"><div><p className="eyebrow">{section === 'overview' ? `${todayLabel} / YOUR WORKSPACE` : `PERSONAL / ${pageTitle.toUpperCase()}`}</p><h1>{section === 'overview' ? `Good to have you here, ${user.first_name}.` : pageTitle}</h1><p className="page-subtitle">{section === 'overview' ? 'Here’s what’s happening across your workspace.' : pageDescription(section)}</p></div><button className="button button-primary heading-action" onClick={() => openCreate(section === 'finance' ? 'expenses' : section === 'workspace' ? 'tasks' : 'projects')}><Plus size={16} />{section === 'finance' ? 'Add expense' : section === 'workspace' ? 'New task' : 'New project'}</button></div>
+        <div className="page-heading"><div><p className="eyebrow">{section === 'overview' ? `${todayLabel} / ${occupation.replaceAll('_', ' ').toUpperCase()} WORKSPACE` : `PERSONAL / ${pageTitle.toUpperCase()}`}</p><h1>{section === 'overview' && occupation !== 'other' ? `${occupationProfile.title}, ${user.first_name}.` : section === 'overview' ? `Good to have you here, ${user.first_name}.` : pageTitle}</h1><p className="page-subtitle">{section === 'overview' ? occupationProfile.subtitle : pageDescription(section)}</p></div><button className="button button-primary heading-action" onClick={() => openCreate(section === 'finance' ? 'expenses' : section === 'workspace' ? 'tasks' : 'projects')}><Plus size={16} />{section === 'finance' ? 'Add expense' : section === 'workspace' ? 'New task' : section === 'overview' ? occupationProfile.projectAction : 'New project'}</button></div>
         {(health === 'offline' || health === 'degraded') && <div className="api-warning dashboard-warning" role="status"><strong>API connection issue</strong><span>{healthError || 'The health check did not report a healthy service.'}</span><small>If this is a CORS error, set Flask <code>FRONTEND_ORIGIN</code> to this frontend’s origin and restart Flask.</small></div>}
         {loadState === 'loading' ? <DashboardSkeleton /> : <>
-          {section === 'overview' && <Overview data={data} errors={loadErrors} onNavigate={selectSection} onCreate={openCreate} />}
+          {section === 'overview' && <Overview data={data} errors={loadErrors} onNavigate={selectSection} onCreate={openCreate} occupation={occupation} />}
           {section === 'projects' && <ProjectsPage projects={data.projects} error={loadErrors.projects} onCreate={() => openCreate('projects')} onEdit={(item) => openEdit('projects', item)} onDelete={(item) => deleteResource('projects', item)} />}
-          {section === 'finance' && <FinancePage expenses={data.expenses} error={loadErrors.expenses} onCreate={() => openCreate('expenses')} onEdit={(item) => openEdit('expenses', item)} onDelete={(item) => deleteResource('expenses', item)} />}
+          {section === 'finance' && <FinancePage expenses={data.expenses} accounts={data.financeAccounts} categories={data.financeCategories} budgets={data.budgets} goals={data.goals} error={loadErrors.expenses} financeError={loadErrors.financeAccounts || loadErrors.financeCategories || loadErrors.budgets || loadErrors.goals} onCreate={openCreate} onEdit={(item) => openEdit('expenses', item)} onDelete={deleteResource} onContribute={contributeToGoal} />}
           {section === 'workspace' && <WorkspacePage tasks={data.tasks} notes={data.notes} errors={loadErrors} onCreate={openCreate} onEdit={openEdit} onDelete={deleteResource} onRefresh={refresh} notify={notify} celebrate={celebrate} />}
           {section === 'cloud' && <FamilyCloudPage files={data.files} error={loadErrors.files} familyMembers={data.familyMembers} membersError={loadErrors.familyMembers} onRefresh={refresh} notify={notify} />}
         </>}
       </div>
       <footer className="main-footer"><span><span className="footer-pip" /> ALL SYSTEMS OPERATIONAL</span><span>RERE CLOUD <b>·</b> BUILT FOR FOCUS</span></footer>
     </main>
-    {dialog && <ResourceDialog resource={dialog.resource} item={dialog.item} onClose={() => setDialog(null)} onSave={saveResource} />}
+    {dialog && <ResourceDialog resource={dialog.resource} item={dialog.item} categories={data.financeCategories} accounts={data.financeAccounts} onClose={() => setDialog(null)} onSave={saveResource} />}
+    {saving && <UploadStatusOverlay state={saving} />}
     {toast && <div className="toast" role="status"><Check size={15} />{toast}</div>}
     {success && <SuccessOverlay title={success.title} message={success.message} tone={success.tone} onDone={() => setSuccess(null)} />}
   </div>
 }
 
 function resourceLabel(resource) {
-  return { projects: 'Project', expenses: 'Expense', tasks: 'Task', notes: 'Note' }[resource] || 'Item'
+  return { projects: 'Project', expenses: 'Transaction', tasks: 'Task', notes: 'Note', accounts: 'Account', categories: 'Category', budgets: 'Budget', goals: 'Financial goal' }[resource] || 'Item'
 }
 
 function pageDescription(section) {
@@ -430,7 +485,8 @@ function pageDescription(section) {
   }[section]
 }
 
-function Overview({ data, errors, onNavigate, onCreate }) {
+function Overview({ data, errors, onNavigate, onCreate, occupation = 'other' }) {
+  const profile = OCCUPATION_PROFILES[occupation] || OCCUPATION_PROFILES.other
   const projectStats = data.stats?.projects
   const taskStats = data.stats?.tasks
   const expenseStats = data.stats?.expenses
@@ -439,7 +495,7 @@ function Overview({ data, errors, onNavigate, onCreate }) {
     { label: 'Active projects', value: errors.projects ? null : data.projects.filter((project) => project.status === 'active').length, icon: Activity, delta: errors.projects ? 'Unavailable' : projectStats ? `${Math.max(0, (projectStats.total || 0) - (projectStats.completed || 0))} in progress` : null, color: 'green', target: 'projects' },
     { label: 'Open tasks', value: taskStats ? (taskStats.total || 0) - (taskStats.completed || 0) : null, icon: ListTodo, delta: taskStats ? `${taskStats.pending ?? 0} pending` : null, color: 'amber', target: 'workspace' },
     { label: 'Recorded expenses', value: expenseStats?.total_amount != null ? currency(expenseStats.total_amount) : null, icon: CreditCard, delta: expenseStats ? `${expenseStats.total ?? 0} entries` : null, color: 'blue', target: 'finance' },
-  ]
+  ].sort((first, second) => profile.priority.indexOf(first.label) - profile.priority.indexOf(second.label))
   const updates = [
     ...data.projects.slice(0, 2).map((item) => ({ title: item.title, detail: `Project ${item.status?.replace('_', ' ') || 'updated'}`, date: item.updated_at || item.created_at, icon: FolderKanban })),
     ...data.tasks.slice(0, 2).map((item) => ({ title: item.title, detail: `Task ${item.status?.replace('_', ' ') || 'updated'}`, date: item.updated_at || item.created_at, icon: ListTodo })),
@@ -450,11 +506,11 @@ function Overview({ data, errors, onNavigate, onCreate }) {
     <section className="stats-grid" aria-label="Workspace statistics">{stats.map(({ label, value, icon: Icon, delta, color, target }) => <button className="stat-card" key={label} onClick={() => onNavigate(target)}><div className="stat-top"><span>{label}</span><span className={`stat-icon icon-${color}`}><Icon size={17} /></span></div><strong className="stat-value">{value == null ? '—' : value}</strong><span className="stat-foot">{delta || (errors.stats ? 'Stats unavailable' : 'No records yet')}<ArrowUpRight size={13} /></span></button>)}</section>
     {(errors.stats || errors.projects || errors.tasks || errors.expenses) && <InlineError message="Some dashboard data could not be loaded. Check your API connection or sign in again." />}
     <div className="overview-columns">
-      <section className="panel projects-panel"><PanelHeading title="Recent projects" kicker="YOUR WORK" action="View all" onAction={() => onNavigate('projects')} /><div className="recent-projects">{data.projects.length ? data.projects.slice(0, 4).map((project) => <div className="recent-project" key={project.id}><span className="project-glyph"><Blocks size={16} /></span><span className="recent-project-copy"><strong>{project.title}</strong><small>{project.description || 'No description provided'}</small></span><StatusBadge status={project.status} /><span className="row-date">{friendlyDate(project.updated_at || project.created_at)}</span></div>) : <EmptyState icon={FolderKanban} title={errors.projects ? 'Projects unavailable' : 'Nothing in progress yet'} detail={errors.projects ? errors.projects : 'Your projects will show up here once you create one.'} action={!errors.projects && { label: 'Create a project', onClick: () => onCreate('projects') }} />}</div></section>
+      <section className="panel projects-panel"><PanelHeading title={profile.projects} kicker="YOUR WORK" action="View all" onAction={() => onNavigate('projects')} /><div className="recent-projects">{data.projects.length ? data.projects.slice(0, 4).map((project) => <div className="recent-project" key={project.id}><span className="project-glyph"><Blocks size={16} /></span><span className="recent-project-copy"><strong>{project.title}</strong><small>{project.description || 'No description provided'}</small></span><StatusBadge status={project.status} /><span className="row-date">{friendlyDate(project.updated_at || project.created_at)}</span></div>) : <EmptyState icon={FolderKanban} title={errors.projects ? 'Projects unavailable' : 'Nothing in progress yet'} detail={errors.projects ? errors.projects : 'Your projects will show up here once you create one.'} action={!errors.projects && { label: profile.projectAction, onClick: () => onCreate('projects') }} />}</div></section>
       <section className="panel activity-panel"><PanelHeading title="Recent activity" kicker="LATEST UPDATES" /><div className="activity-list">{updates.length ? updates.map((update, index) => <div className="activity-item" key={`${update.title}-${index}`}><span className="activity-icon"><update.icon size={15} /></span><div><strong>{update.title}</strong><span>{update.detail}</span></div><time>{friendlyDate(update.date)}</time></div>) : <EmptyState icon={Activity} title={errors.projects || errors.tasks ? 'Activity unavailable' : 'Quiet for now'} detail="Recent project, task, and note updates will appear here." />}</div></section>
     </div>
     <div className="overview-bottom">
-      <section className="panel quick-panel"><PanelHeading title="Quick actions" kicker="GET MOVING" /><div className="quick-actions"><QuickAction icon={FolderKanban} label="New project" hint="Start something new" onClick={() => onCreate('projects')} /><QuickAction icon={CreditCard} label="Add expense" hint="Record a purchase" onClick={() => onCreate('expenses')} /><QuickAction icon={ListTodo} label="Create task" hint="Capture a next step" onClick={() => onCreate('tasks')} /><QuickAction icon={FileText} label="Write a note" hint="Save a thought" onClick={() => onCreate('notes')} /></div></section>
+      <section className="panel quick-panel"><PanelHeading title="Quick actions" kicker="GET MOVING" /><div className="quick-actions"><QuickAction icon={FolderKanban} label={profile.projectAction} hint="Start something new" onClick={() => onCreate('projects')} /><QuickAction icon={CreditCard} label="Add expense" hint="Record a purchase" onClick={() => onCreate('expenses')} /><QuickAction icon={ListTodo} label={profile.taskAction} hint={profile.taskHint} onClick={() => onCreate('tasks')} /><QuickAction icon={FileText} label="Write a note" hint="Save a thought" onClick={() => onCreate('notes')} /></div></section>
       <section className="terminal-panel"><div className="terminal-head"><span><Terminal size={14} /> SYSTEM SNAPSHOT</span><span className="terminal-live"><i /> LIVE</span></div><div className="terminal-body"><p><span>01</span><b>api.status</b><em>{errors.stats ? 'partial' : 'operational'}</em></p><p><span>02</span><b>workspace.projects</b><em>{data.stats?.projects?.total ?? '—'} records</em></p><p><span>03</span><b>workspace.notes</b><em>{data.stats?.notes?.total ?? '—'} records</em></p><p className="terminal-prompt"><span>›</span> ready<span className="cursor-block" /></p></div></section>
     </div>
   </div>
@@ -485,30 +541,74 @@ function ProjectsPage({ projects, error, onCreate, onEdit, onDelete }) {
   </>
 }
 
-function FinancePage({ expenses, error, onCreate, onEdit, onDelete }) {
+function FinancePage({ expenses, accounts, categories: savedCategories, budgets, goals, error, financeError, onCreate, onEdit, onDelete, onContribute }) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [dateRange, setDateRange] = useState('all')
-  const categories = [...new Set(expenses.map((expense) => expense.category).filter(Boolean))].sort()
+  const categories = [...new Set([...savedCategories.map((item) => item.name), ...expenses.map((item) => item.category)].filter(Boolean))].sort()
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)
   const filtered = expenses.filter((expense) => {
-    const expenseDate = expense.expense_date ? new Date(`${String(expense.expense_date).slice(0, 10)}T00:00:00`) : null
-    const dateMatches = dateRange === 'all' || (expenseDate && expenseDate >= (dateRange === 'month' ? monthStart : thirtyDaysAgo) && expenseDate <= now)
-    return dateMatches && (category === 'all' || expense.category === category) && `${expense.title} ${expense.category}`.toLowerCase().includes(query.toLowerCase())
+    const transactionDate = expense.expense_date ? new Date(`${String(expense.expense_date).slice(0, 10)}T00:00:00`) : null
+    const dateMatches = dateRange === 'all' || (transactionDate && transactionDate >= (dateRange === 'month' ? monthStart : thirtyDaysAgo) && transactionDate <= now)
+    return dateMatches && (category === 'all' || expense.category === category) && `${expense.title} ${expense.category} ${expense.account_name || ''}`.toLowerCase().includes(query.toLowerCase())
   })
-  const total = expenses.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0)
-  const categoryTotals = categories.map((name) => ({ name, total: expenses.filter((expense) => expense.category === name).reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0) })).sort((a, b) => b.total - a.total)
+  const spendingTotal = expenses.filter((item) => item.transaction_type !== 'income').reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+  const incomeTotal = expenses.filter((item) => item.transaction_type === 'income').reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+  const totalBalance = accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0)
+  const categoryTotals = categories.map((name) => ({ name, total: expenses.filter((item) => item.category === name && item.transaction_type !== 'income').reduce((sum, item) => sum + (Number(item.amount) || 0), 0) })).filter((item) => item.total > 0).sort((first, second) => second.total - first.total)
   const maxCategory = Math.max(1, ...categoryTotals.map((item) => item.total))
-  return <>
-    <div className="finance-summary"><section className="finance-total"><div><p className="eyebrow">TOTAL RECORDED</p><span className="finance-value">{currency(total)}</span><small>Across {expenses.length} {expenses.length === 1 ? 'expense' : 'expenses'}</small></div><span className="finance-total-icon"><Wallet size={21} /></span></section><section className="finance-insight"><span className="insight-symbol"><Activity size={17} /></span><div><p className="eyebrow">SPENDING SNAPSHOT</p><strong>{categoryTotals.length ? `${categoryTotals.length} categories tracked` : 'No categories yet'}</strong><small>{categoryTotals.length ? `Top category: ${categoryTotals[0].name}` : 'Category summaries appear as you record expenses.'}</small></div></section></div>
-    <section className="panel finance-panel"><div className="panel-heading finance-list-heading"><div><p className="eyebrow">TRANSACTION LOG</p><h2>Recent expenses</h2></div><div className="finance-filters"><label className="search-box compact-search"><Search size={15} /><input aria-label="Search expenses" placeholder="Search..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><label className="select-wrap"><span className="sr-only">Filter expenses by date</span><select value={dateRange} onChange={(event) => setDateRange(event.target.value)}><option value="all">All dates</option><option value="month">This month</option><option value="30days">Last 30 days</option></select><ChevronDown size={14} /></label><label className="select-wrap"><span className="sr-only">Filter expenses by category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option>{categories.map((name) => <option key={name}>{name}</option>)}</select><ChevronDown size={14} /></label></div></div>
-      {error && <InlineError message={error} />}
-      {filtered.length ? <div className="expense-table-wrap"><table className="expense-table"><thead><tr><th>DESCRIPTION</th><th>CATEGORY</th><th>DATE</th><th>AMOUNT</th><th aria-label="Actions" /></tr></thead><tbody>{filtered.map((expense) => <tr key={expense.id}><td><span className="expense-title"><span className="expense-mark"><CreditCard size={15} /></span>{expense.title}</span></td><td><span className="category-tag">{expense.category}</span></td><td>{friendlyDate(expense.expense_date)}</td><td className="amount-cell">{currency(expense.amount)}</td><td><div className="row-actions"><button className="icon-button" title="Edit expense" aria-label={`Edit ${expense.title}`} onClick={() => onEdit(expense)}><Settings2 size={15} /></button><button className="icon-button danger-hover" title="Delete expense" aria-label={`Delete ${expense.title}`} onClick={() => onDelete(expense)}><X size={15} /></button></div></td></tr>)}</tbody></table></div> : <EmptyState icon={CreditCard} title={error ? 'Expenses could not be loaded' : query || category !== 'all' || dateRange !== 'all' ? 'No matching expenses' : 'No expenses recorded'} detail={error || (query || category !== 'all' || dateRange !== 'all' ? 'Try another search, category, or date range.' : 'Your expense history will appear here after you add your first entry.')} action={!error && !query && category === 'all' && dateRange === 'all' ? { label: 'Add an expense', onClick: onCreate } : undefined} />}
+  const monthlyTrend = Array.from({ length: 6 }, (_, index) => {
+    const month = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1)
+    const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
+    const monthly = expenses.filter((item) => String(item.expense_date || '').slice(0, 7) === key)
+    return { label: new Intl.DateTimeFormat('en-KE', { month: 'short' }).format(month), spent: monthly.filter((item) => item.transaction_type !== 'income').reduce((sum, item) => sum + Number(item.amount || 0), 0), income: monthly.filter((item) => item.transaction_type === 'income').reduce((sum, item) => sum + Number(item.amount || 0), 0) }
+  })
+  const maxMonth = Math.max(1, ...monthlyTrend.flatMap((month) => [month.spent, month.income]))
+  const incomeLinePoints = monthlyTrend.map((month, index) => `${index * 100 + 50},${94 - month.income / maxMonth * 84}`).join(' ')
+  const chartKey = monthlyTrend.map((month) => `${month.spent}-${month.income}`).join(':')
+  const dailyTrend = Array.from({ length: 14 }, (_, index) => {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13 + index)
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+    const cents = expenses.filter((item) => item.transaction_type !== 'income' && String(item.expense_date || '').slice(0, 10) === key).reduce((sum, item) => sum + Math.round(Number(item.amount || 0) * 100), 0)
+    return { key, label: String(day.getDate()), date: new Intl.DateTimeFormat('en-KE', { day: 'numeric', month: 'short' }).format(day), spent: cents / 100 }
+  })
+  const maxDailySpend = Math.max(0.01, ...dailyTrend.map((day) => day.spent))
+  const dailySpendingPoints = dailyTrend.map((day, index) => `${index * 100 + 50},${94 - day.spent / maxDailySpend * 84}`).join(' ')
+  const dailyChartKey = dailyTrend.map((day) => `${day.key}-${day.spent}`).join(':')
+  return <div className="finance-layout">
+    {financeError && <InlineError message={financeError} />}
+    <div className="finance-actions"><div className="finance-action-group"><button className="button button-primary" onClick={() => onCreate('expenses')}><Plus size={15} />Add transaction</button><button className="button button-quiet" onClick={() => onCreate('accounts')}><Plus size={15} />Add account</button><button className="button button-quiet" onClick={() => onCreate('categories')}><Plus size={15} />Add category</button></div><div className="finance-action-group"><button className="button button-secondary" onClick={() => onCreate('budgets')}><Plus size={15} />New budget</button><button className="button button-secondary" onClick={() => onCreate('goals')}><Plus size={15} />New goal</button></div></div>
+    <section className="account-grid" aria-label="Money accounts">
+      <article className="account-total"><p className="eyebrow">TOTAL AVAILABLE</p><strong>{currency(totalBalance)}</strong><span>Across {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}</span></article>
+      {accounts.map((account) => <article className="account-card" key={account.id}><div><Wallet size={17} /><button className="icon-button danger-hover" title={`Delete ${account.name}`} aria-label={`Delete ${account.name}`} onClick={() => onDelete('accounts', account)}><X size={15} /></button></div><strong>{account.name}</strong><span>{currency(account.balance)}</span></article>)}
+      {!accounts.length && <button className="account-empty" onClick={() => onCreate('accounts')}><Plus size={17} />Add your first account</button>}
     </section>
-    {categoryTotals.length > 0 && <section className="panel category-panel"><PanelHeading title="By category" kicker="SPENDING MIX" /><div className="category-breakdown">{categoryTotals.map(({ name, total: amount }, index) => <div className="category-row" key={name}><div className="category-row-top"><span>{name}</span><strong>{currency(amount)}</strong></div><div className="category-track"><span style={{ width: `${Math.max(2, amount / maxCategory * 100)}%` }} className={`category-fill category-fill-${index % 4}`} /></div></div>)}</div></section>}
-  </>
+    <div className="finance-summary"><section className="finance-total"><div><p className="eyebrow">TOTAL SPENDING</p><span className="finance-value">{currency(spendingTotal)}</span><small>{expenses.filter((item) => item.transaction_type !== 'income').length} expenses recorded</small></div><span className="finance-total-icon"><CreditCard size={21} /></span></section><section className="finance-insight"><span className="insight-symbol"><ArrowUpRight size={17} /></span><div><p className="eyebrow">INCOME RECORDED</p><strong>{currency(incomeTotal)}</strong><small>{categories.length} reusable categories</small></div></section></div>
+    <div className="finance-chart-grid">
+      <section className="panel finance-chart-panel"><PanelHeading title="Cash flow" kicker="LAST SIX MONTHS" /><div className="chart-legend"><span><i className="legend-spending" />Spending</span><span><i className="legend-income" />Income</span></div><div className="month-chart" role="img" aria-label="Monthly spending bars and income trend line for the last six months">{monthlyTrend.map((month, index) => <div className="month-chart-column" key={`${month.label}-${month.spent}-${month.income}`}><div className="month-bars"><span className="month-bar month-bar-spending" title={`Spending ${currency(month.spent)}`} style={{ height: `${month.spent ? Math.max(3, month.spent / maxMonth * 100) : 0}%`, animationDelay: `${index * 65}ms` }} /></div><span>{month.label}</span></div>)}<svg key={chartKey} className="income-line-chart" viewBox="0 0 600 100" preserveAspectRatio="none" aria-hidden="true"><polyline pathLength="1" points={incomeLinePoints} /><g>{monthlyTrend.map((month, index) => <circle key={month.label} cx={index * 100 + 50} cy={94 - month.income / maxMonth * 84} r="3.2"><title>{`${month.label} income: ${currency(month.income)}`}</title></circle>)}</g></svg></div></section>
+      <section className="panel finance-chart-panel"><PanelHeading title="Spending by category" kicker="ALL RECORDED" />{categoryTotals.length ? <div className="category-breakdown">{categoryTotals.slice(0, 6).map(({ name, total: amount }, index) => <div className="category-row" key={name}><div className="category-row-top"><span>{name}</span><strong>{currency(amount)}</strong></div><div className="category-track"><span style={{ width: `${Math.max(2, amount / maxCategory * 100)}%` }} className={`category-fill category-fill-${index % 4}`} /></div></div>)}</div> : <p className="chart-empty">Category totals appear after expenses are recorded.</p>}</section>
+      <section className="panel finance-chart-panel daily-chart-panel"><PanelHeading title="Daily spending" kicker="LAST 14 DAYS" /><div className="chart-legend"><span><i className="legend-daily" />Expenses by day</span><span className="daily-scale">Scale max: {currency(maxDailySpend)}</span></div><div className="month-chart daily-chart" role="img" aria-label="Daily expenses over the last 14 days, scaled independently from income">{dailyTrend.map((day, index) => <div className="month-chart-column" key={`${day.key}-${day.spent}`}><div className="month-bars"><span className="month-bar month-bar-spending" title={`${day.date}: ${currency(day.spent)}`} style={{ height: `${day.spent ? Math.max(2, day.spent / maxDailySpend * 100) : 0}%`, animationDelay: `${index * 35}ms` }} /></div><span title={day.date}>{day.label}</span></div>)}<svg key={dailyChartKey} className="income-line-chart daily-line-chart" viewBox="0 0 1400 100" preserveAspectRatio="none" aria-hidden="true"><polyline pathLength="1" points={dailySpendingPoints} /><g>{dailyTrend.map((day, index) => <circle key={day.key} cx={index * 100 + 50} cy={94 - day.spent / maxDailySpend * 84} r={day.spent ? '3' : '1.5'}><title>{`${day.date}: ${currency(day.spent)}`}</title></circle>)}</g></svg></div></section>
+    </div>
+    <div className="finance-plan-grid">
+      <section className="panel finance-plan-panel"><PanelHeading title="Budgets" kicker="SPENDING LIMITS" action="Add budget" onAction={() => onCreate('budgets')} />{budgets.length ? <div className="finance-plan-list">{budgets.map((budget) => { const spent = Number(budget.spent) || 0; const limit = Number(budget.amount) || 0; const percent = limit ? Math.min(100, spent / limit * 100) : 0; return <article className="budget-row" key={budget.id}><div className="budget-row-top"><div><strong>{budget.category}</strong><small>{budget.period} budget</small></div><button className="icon-button danger-hover" aria-label={`Delete ${budget.category} budget`} title="Delete budget" onClick={() => onDelete('budgets', { ...budget, title: budget.category })}><X size={15} /></button></div><div className="budget-progress"><span className={percent >= 100 ? 'budget-over' : ''} style={{ width: `${percent}%` }} /></div><div className="budget-numbers"><span>{currency(spent)} spent</span><strong>{currency(limit)}</strong></div></article> })}</div> : <EmptyState icon={Activity} title="No budgets yet" detail="Set a category limit to track spending against your plan." action={{ label: 'Create budget', onClick: () => onCreate('budgets') }} />}</section>
+      <section className="panel finance-plan-panel"><PanelHeading title="Financial goals" kicker="SAVING JOURNEY" action="Add goal" onAction={() => onCreate('goals')} />{goals.length ? <div className="finance-plan-list">{goals.map((goal) => <GoalProgress key={goal.id} goal={goal} accounts={accounts} onDelete={() => onDelete('goals', { ...goal, title: goal.title })} onContribute={onContribute} />)}</div> : <EmptyState icon={Wallet} title="No goals yet" detail="Create a goal, allocate money, and earn XP as your savings grow." action={{ label: 'Create goal', onClick: () => onCreate('goals') }} />}</section>
+    </div>
+    <section className="panel finance-panel"><div className="panel-heading finance-list-heading"><div><p className="eyebrow">TRANSACTION LOG</p><h2>Income and expenses</h2></div><div className="finance-filters"><label className="search-box compact-search"><Search size={15} /><input aria-label="Search transactions" placeholder="Search..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by date</span><select value={dateRange} onChange={(event) => setDateRange(event.target.value)}><option value="all">All dates</option><option value="month">This month</option><option value="30days">Last 30 days</option></select><ChevronDown size={14} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option>{categories.map((name) => <option key={name}>{name}</option>)}</select><ChevronDown size={14} /></label></div></div>
+      {error && <InlineError message={error} />}
+      {filtered.length ? <div className="expense-table-wrap"><table className="expense-table"><thead><tr><th>DESCRIPTION</th><th>TYPE</th><th>CATEGORY</th><th>ACCOUNT</th><th>DATE</th><th>AMOUNT</th><th aria-label="Actions" /></tr></thead><tbody>{filtered.map((expense) => <tr key={expense.id}><td><span className="expense-title"><span className="expense-mark"><CreditCard size={15} /></span>{expense.title}</span></td><td><span className={`transaction-type transaction-${expense.transaction_type || 'expense'}`}>{expense.transaction_type || 'expense'}</span></td><td><span className="category-tag">{expense.category}</span></td><td>{expense.account_name || 'Unassigned'}</td><td>{friendlyDate(expense.expense_date)}</td><td className={`amount-cell ${expense.transaction_type === 'income' ? 'amount-income' : ''}`}>{expense.transaction_type === 'income' ? '+' : '-'}{currency(expense.amount)}</td><td><div className="row-actions"><button className="icon-button" title="Edit transaction" aria-label={`Edit ${expense.title}`} onClick={() => onEdit(expense)}><Settings2 size={15} /></button><button className="icon-button danger-hover" title="Delete transaction" aria-label={`Delete ${expense.title}`} onClick={() => onDelete('expenses', expense)}><X size={15} /></button></div></td></tr>)}</tbody></table></div> : <EmptyState icon={CreditCard} title={error ? 'Transactions could not be loaded' : query || category !== 'all' || dateRange !== 'all' ? 'No matching transactions' : 'No transactions recorded'} detail={error || (query || category !== 'all' || dateRange !== 'all' ? 'Try another search, category, or date range.' : 'Add income or expenses to start tracking your accounts.')} action={!error && !query && category === 'all' && dateRange === 'all' ? { label: 'Add transaction', onClick: () => onCreate('expenses') } : undefined} />}
+    </section>
+  </div>
+}
+
+function GoalProgress({ goal, accounts, onDelete, onContribute }) {
+  const [accountId, setAccountId] = useState(accounts[0]?.id || '')
+  const [amount, setAmount] = useState('')
+  const saved = Number(goal.saved_amount) || 0
+  const target = Number(goal.target_amount) || 0
+  const progress = target ? Math.min(100, saved / target * 100) : 0
+  return <article className="goal-row"><div className="goal-row-top"><div><strong>{goal.title}</strong><small>{goal.target_date ? `Target ${friendlyDate(goal.target_date)}` : 'No target date'}</small></div><button className="icon-button danger-hover" aria-label={`Delete ${goal.title}`} title="Delete goal" onClick={onDelete}><X size={15} /></button></div><div className="goal-progress"><span style={{ width: `${progress}%` }} /></div><div className="goal-numbers"><span>{currency(saved)} of {currency(target)}</span><strong>{Math.floor(Number(goal.xp) || 0)} XP</strong></div><div className="goal-contribute"><label className="select-wrap"><span className="sr-only">Account for contribution to {goal.title}</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={!accounts.length}><option value="">Account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select><ChevronDown size={14} /></label><input aria-label={`Contribution amount for ${goal.title}`} type="number" min="0.01" step="0.01" placeholder="Amount" value={amount} onChange={(event) => setAmount(event.target.value)} /><button className="button button-quiet small-button" disabled={!accountId || !amount} onClick={() => { onContribute(goal, accountId, amount); setAmount('') }}>Allocate</button></div></article>
 }
 
 function WorkspacePage({ tasks, notes, errors, onCreate, onEdit, onDelete, onRefresh, notify, celebrate }) {
@@ -545,23 +645,70 @@ function FamilyCloudPage({ files, error, familyMembers, membersError, onRefresh,
   const [view, setView] = useState('gallery')
   const [uploadState, setUploadState] = useState(null)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
+  const [inviteCode, setInviteCode] = useState('')
+  const [joinCode, setJoinCode] = useState('')
+  const [familyBusy, setFamilyBusy] = useState('')
   const closePhotoPreview = useCallback(() => setSelectedPhoto(null), [])
 
-  async function handleUpload(event) {
-    const file = event.target.files?.[0]
-    if (!file) return
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('category', category)
-    setUploadState({ phase: 'uploading', name: file.name })
+  async function createInvite() {
+    setFamilyBusy('invite')
     try {
-      await api.files.upload(formData)
-      onRefresh()
-      notify('Uploaded to your family cloud.')
-      setUploadState({ phase: 'success', name: file.name })
-      await new Promise((resolve) => window.setTimeout(resolve, 1050))
+      const result = await api.family.createInvite()
+      setInviteCode(result.code)
+      notify('Family invite created. It expires in seven days.')
     } catch (requestError) {
       notify(requestError.message)
+    } finally {
+      setFamilyBusy('')
+    }
+  }
+
+  async function joinFamily(event) {
+    event.preventDefault()
+    setFamilyBusy('join')
+    try {
+      const result = await api.family.join(joinCode.trim())
+      setJoinCode('')
+      setInviteCode('')
+      setView('gallery')
+      onRefresh()
+      notify(result.message || 'Family archive connected.')
+    } catch (requestError) {
+      notify(requestError.message)
+    } finally {
+      setFamilyBusy('')
+    }
+  }
+
+  async function copyInvite() {
+    try {
+      await navigator.clipboard.writeText(inviteCode)
+      notify('Invite code copied.')
+    } catch {
+      notify('Copy is unavailable in this browser. Select the invite code to copy it.')
+    }
+  }
+
+  async function handleUpload(event) {
+    const files = Array.from(event.target.files || [])
+    if (!files.length) return
+    let uploadedCount = 0
+    try {
+      for (const [index, file] of files.entries()) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('category', category)
+        setUploadState({ phase: 'uploading', label: 'Upload', name: files.length > 1 ? `${index + 1} of ${files.length} · ${file.name}` : file.name })
+        await api.files.upload(formData)
+        uploadedCount += 1
+      }
+      onRefresh()
+      notify(files.length > 1 ? `${files.length} photos uploaded to your family cloud.` : 'Uploaded to your family cloud.')
+      setUploadState({ phase: 'success', label: 'Upload', name: files.length > 1 ? `${files.length} photos` : files[0].name })
+      await new Promise((resolve) => window.setTimeout(resolve, 1050))
+    } catch (requestError) {
+      if (uploadedCount) onRefresh()
+      notify(uploadedCount ? `${uploadedCount} of ${files.length} files uploaded. ${requestError.message}` : requestError.message)
     } finally {
       setUploadState(null)
       event.target.value = ''
@@ -626,14 +773,22 @@ function FamilyCloudPage({ files, error, familyMembers, membersError, onRefresh,
 
   return <div className="cloud-layout">
     <section className="panel cloud-upload-panel">
-      <div className="panel-heading"><div><p className="eyebrow">PRIVATE ARCHIVE</p><h2>Family cloud</h2></div></div>
+      <div className="panel-heading"><div><p className="eyebrow">PRIVATE FAMILY MEDIA</p><h2>Photos & videos</h2></div></div>
       <div className="cloud-upload-row">
         <label className="select-wrap"><span className="sr-only">File category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="photo">Photos</option><option value="video">Videos</option><option value="document">Documents</option><option value="other">Other</option></select><ChevronDown size={14} /></label>
         <label className="button button-primary cloud-upload-button" htmlFor="family-cloud-upload">
           {uploadState?.phase === 'uploading' ? <LoaderCircle size={15} className="spin" /> : <Upload size={15} />}
           {uploadState?.phase === 'uploading' ? 'Uploading...' : 'Upload file'}
         </label>
-        <input id="family-cloud-upload" type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xlsx,.txt,.csv" onChange={handleUpload} disabled={Boolean(uploadState)} hidden />
+        <input id="family-cloud-upload" type="file" accept={category === 'photo' ? 'image/*' : 'video/*,.pdf,.doc,.docx,.xlsx,.txt,.csv'} multiple={category === 'photo'} onChange={handleUpload} disabled={Boolean(uploadState)} hidden />
+      </div>
+      <div className="family-sharing-tools">
+        <div className="family-sharing-intro"><strong>Connect family accounts</strong><span>Invite another signed-in account to share this private archive. Both accounts’ family files are kept.</span></div>
+        <div className="family-share-actions">
+          <button className="button button-quiet" type="button" onClick={createInvite} disabled={Boolean(familyBusy)}>{familyBusy === 'invite' ? <LoaderCircle size={14} className="spin" /> : <Plus size={14} />}{familyBusy === 'invite' ? 'Creating code...' : 'Create invite code'}</button>
+          {inviteCode && <div className="family-invite-code"><code>{inviteCode}</code><button className="icon-button" type="button" title="Copy invite code" aria-label="Copy invite code" onClick={copyInvite}><Copy size={15} /></button></div>}
+          <form className="family-join-form" onSubmit={joinFamily}><input aria-label="Family invite code" autoComplete="off" maxLength={64} placeholder="Enter invite code" value={joinCode} onChange={(event) => setJoinCode(event.target.value)} required /><button className="button button-secondary" type="submit" disabled={Boolean(familyBusy)}>{familyBusy === 'join' ? <LoaderCircle size={14} className="spin" /> : <ArrowRight size={14} />}{familyBusy === 'join' ? 'Joining...' : 'Join family'}</button></form>
+        </div>
       </div>
       <div className="cloud-stats-row">
         {familyHighlights.map((item) => <div className="cloud-stat" key={item.label}><strong>{item.value}</strong><span>{item.label}</span></div>)}
@@ -664,6 +819,7 @@ function FamilyCloudPage({ files, error, familyMembers, membersError, onRefresh,
                     <div className="family-card-body">
                       <strong title={file.original_name}>{file.original_name}</strong>
                       <small>{friendlyDate(file.file_date || file.created_at)}</small>
+                      <small>Uploaded by {file.uploader_name || 'Family member'}</small>
                       <div className="row-actions family-actions">
                         <button className="button button-quiet small-button" onClick={() => handleDownload(file)}>Download</button>
                         <button className="icon-button danger-hover" onClick={() => handleDelete(file)} aria-label={`Delete ${file.original_name}`}><X size={15} /></button>
@@ -685,6 +841,7 @@ function FamilyCloudPage({ files, error, familyMembers, membersError, onRefresh,
               <div className="family-card-body">
                 <strong>{file.original_name}</strong>
                 <small>{friendlyDate(file.file_date || file.created_at)}</small>
+                <small>Uploaded by {file.uploader_name || 'Family member'}</small>
                 <div className="row-actions family-actions">
                   <button className="button button-quiet small-button" onClick={() => handleDownload(file)}>Download</button>
                   <button className="icon-button danger-hover" onClick={() => handleDelete(file)} aria-label={`Delete ${file.original_name}`}><X size={15} /></button>
@@ -793,17 +950,18 @@ function FamilyPhotoLightbox({ file, onClose }) {
 
 function UploadStatusOverlay({ state }) {
   const complete = state.phase === 'success'
+  const label = state.label || 'Upload'
 
   return <div className={`upload-veil ${complete ? 'upload-complete' : ''}`} role="status" aria-live="polite">
     <div className="upload-dialog">
       <div className={`upload-mark ${complete ? 'upload-mark-done' : ''}`}>
         {complete ? <Check size={32} strokeWidth={2.5} /> : <LoaderCircle size={30} className="spin" />}
       </div>
-      <p className="eyebrow">{complete ? 'SAVED TO FAMILY CLOUD' : 'SECURE TRANSFER'}</p>
-      <h2>{complete ? 'Upload complete' : 'Uploading your file'}</h2>
+      <p className="eyebrow">{complete ? `${label.toUpperCase()} COMPLETE` : `${label.toUpperCase()} IN PROGRESS`}</p>
+      <h2>{complete ? `${label} complete` : `${label === 'Save' ? 'Saving' : 'Uploading'} your item`}</h2>
       <p className="upload-file-name">{state.name}</p>
       <div className="upload-progress" aria-hidden="true"><span /></div>
-      <small>{complete ? 'Your memory is ready to preview.' : 'Keeping this window open while your file is saved.'}</small>
+      <small>{complete ? 'Your changes are ready.' : 'Please keep this window open while your changes are saved.'}</small>
     </div>
   </div>
 }
@@ -837,15 +995,28 @@ function FamilyMoviePreview({ file }) {
   </div>
 }
 
-function ResourceDialog({ resource, item, onClose, onSave }) {
-  const [form, setForm] = useState(() => makeInitialForm(resource, item))
+function ResourceDialog({ resource, item, categories = [], accounts = [], onClose, onSave }) {
+  const categoryOptions = categories.map((category) => category.name)
+  const [form, setForm] = useState(() => ({
+    ...makeInitialForm(resource, item),
+    ...(resource === 'expenses' ? {
+      category: item?.category || categoryOptions[0] || 'General',
+      account_id: item?.account_id ? accounts.find((account) => account.id === item.account_id)?.name || '' : accounts[0]?.name || '',
+      transaction_type: item?.transaction_type || 'expense',
+    } : {}),
+    ...(!item && resource === 'budgets' ? { category: categoryOptions[0] || 'General', period: 'monthly' } : {}),
+  }))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const schema = {
     projects: { title: 'Project', fields: [['title', 'Project name'], ['description', 'Description', 'textarea'], ['status', 'Status', 'select', STATUSES]] },
-    expenses: { title: 'Expense', fields: [['title', 'Expense name'], ['amount', 'Amount (KES)', 'number'], ['category', 'Category'], ['expense_date', 'Date', 'date'] ] },
+    expenses: { title: 'Transaction', fields: [['transaction_type', 'Type', 'select', ['expense', 'income']], ['title', 'Description'], ['amount', 'Amount (KES)', 'number'], ['category', 'Category', 'select', categoryOptions.length ? categoryOptions : ['General']], ['account_id', 'Account', 'select', accounts.map((account) => account.name)], ['expense_date', 'Date', 'date'] ] },
     tasks: { title: 'Task', fields: [['title', 'Task title'], ['description', 'Description', 'textarea'], ['status', 'Status', 'select', ['pending', 'in_progress', 'completed']], ['due_date', 'Due date', 'date'] ] },
     notes: { title: 'Note', fields: [['title', 'Title'], ['content', 'Note', 'textarea'] ] },
+    accounts: { title: 'Account', fields: [['name', 'Account name'], ['balance', 'Starting balance (KES)', 'number']] },
+    categories: { title: 'Category', fields: [['name', 'Category name']] },
+    budgets: { title: 'Budget', fields: [['category', 'Category', 'select', categoryOptions.length ? categoryOptions : ['General']], ['amount', 'Limit (KES)', 'number'], ['period', 'Period', 'select', ['daily', 'weekly', 'monthly', 'yearly']]] },
+    goals: { title: 'Financial goal', fields: [['title', 'Goal name'], ['target_amount', 'Target amount (KES)', 'number'], ['target_date', 'Target date', 'date']] },
   }[resource]
 
   useEffect(() => {
@@ -859,7 +1030,15 @@ function ResourceDialog({ resource, item, onClose, onSave }) {
     setError('')
     const payload = { ...form }
       if (!item) for (const key of Object.keys(payload)) if (payload[key] === '') delete payload[key]
-    if (resource === 'expenses') payload.amount = Number(payload.amount)
+        if (resource === 'expenses') {
+          payload.amount = Number(payload.amount)
+          payload.account_id = accounts.find((account) => account.name === payload.account_id)?.id
+        }
+        if (resource === 'accounts' || resource === 'budgets') payload.amount = Number(payload.amount)
+        if (resource === 'goals') payload.target_amount = Number(payload.target_amount)
+      /*
+      <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><header className="modal-head"><div><p className="eyebrow">{item ? 'UPDATE RECORD' : 'NEW RECORD'}</p><h2 id="modal-title">{item ? `Edit ${schema.title.toLowerCase()}` : `Create ${schema.title.toLowerCase()}`}</h2></div><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={18} /></button></header><form onSubmit={submit}><div className="modal-fields">{schema.fields.map(([name, label, type = 'text', options]) => <label className={`field ${type === 'textarea' ? 'field-wide' : ''}`} key={name}><span>{label}</span>{type === 'textarea' ? <textarea name={name} rows={name === 'content' ? 7 : 4} maxLength={name === 'content' ? 20000 : 5000} value={form[name] || ''} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))} /> : type === 'account' ? <select name={name} required value={form[name] || ''} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))}><option value="">{accounts.length ? 'Choose account' : 'Create an account first'}</option>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {currency(account.balance)}</option>)}</select> : type === 'select' ? <select name={name} required value={form[name] || options[0]} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))}>{options.map((option) => <option value={option} key={option}>{option.replaceAll('_', ' ')}</option>)}</select> : <input name={name} type={type} required={!['description', 'content', 'due_date', 'target_date'].includes(name)} min={type === 'number' ? '0' : undefined} step={type === 'number' ? '0.01' : undefined} maxLength={['title', 'name'].includes(name) ? 200 : undefined} value={form[name] || ''} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))} />}</label>)}</div>{error && <p className="form-error" role="alert">{error}</p>}{resource === 'expenses' && !accounts.length && <p className="form-error" role="status">Create an account before recording a transaction.</p>}{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button type="submit" className="button button-primary" disabled={busy || (resource === 'expenses' && !accounts.length)}>{busy && <LoaderCircle size={15} className="spin" />}{busy ? 'Saving...' : item ? 'Save changes' : `Create ${schema.title.toLowerCase()}`}</button></div></form></section></div>
+      */
     setBusy(true)
     try { await onSave(resource, payload, item) }
     catch (requestError) { setError(requestError.message) }

@@ -228,6 +228,21 @@ def ensure_family_tables():
             CONSTRAINT fk_family_files_user FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
         """,
+        """
+        CREATE TABLE IF NOT EXISTS family_invites (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            family_id INT UNSIGNED NOT NULL,
+            created_by INT UNSIGNED NOT NULL,
+            code_hash CHAR(64) NOT NULL,
+            expires_at DATETIME NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_family_invites_code (code_hash),
+            KEY idx_family_invites_family (family_id),
+            CONSTRAINT fk_family_invites_family FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+            CONSTRAINT fk_family_invites_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        """,
     )
 
     try:
@@ -236,6 +251,92 @@ def ensure_family_tables():
     except pymysql.MySQLError:
         app.logger.exception("Family cloud tables could not be created.")
         raise
+
+
+def ensure_finance_tables():
+    required = (
+        """
+        CREATE TABLE IF NOT EXISTS finance_accounts (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id INT UNSIGNED NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            balance DECIMAL(14,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_finance_accounts_name (user_id, name),
+            CONSTRAINT fk_finance_accounts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS expense_categories (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id INT UNSIGNED NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_expense_categories_name (user_id, name),
+            CONSTRAINT fk_expense_categories_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS finance_budgets (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id INT UNSIGNED NOT NULL,
+            category VARCHAR(100) NOT NULL,
+            amount DECIMAL(14,2) NOT NULL,
+            period ENUM('daily','weekly','monthly','yearly') NOT NULL DEFAULT 'monthly',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_finance_budgets_user (user_id),
+            CONSTRAINT fk_finance_budgets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS financial_goals (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id INT UNSIGNED NOT NULL,
+            title VARCHAR(150) NOT NULL,
+            target_amount DECIMAL(14,2) NOT NULL,
+            target_date DATE DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_financial_goals_user (user_id),
+            CONSTRAINT fk_financial_goals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS goal_contributions (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            goal_id INT UNSIGNED NOT NULL,
+            user_id INT UNSIGNED NOT NULL,
+            account_id INT UNSIGNED NOT NULL,
+            amount DECIMAL(14,2) NOT NULL,
+            xp INT UNSIGNED NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_goal_contributions_goal (goal_id),
+            CONSTRAINT fk_goal_contributions_goal FOREIGN KEY (goal_id) REFERENCES financial_goals(id) ON DELETE CASCADE,
+            CONSTRAINT fk_goal_contributions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            CONSTRAINT fk_goal_contributions_account FOREIGN KEY (account_id) REFERENCES finance_accounts(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        """,
+    )
+
+    for statement in required:
+        execute_db(statement)
+
+    budget_period = query_db("SHOW COLUMNS FROM finance_budgets LIKE 'period'", fetchone=True)
+    if "daily" not in budget_period["Type"] or "weekly" not in budget_period["Type"]:
+        execute_db("ALTER TABLE finance_budgets MODIFY period ENUM('daily','weekly','monthly','yearly') NOT NULL DEFAULT 'monthly'")
+    columns = {row["Field"] for row in query_db("SHOW COLUMNS FROM expenses")}
+    if "account_id" not in columns:
+        execute_db("ALTER TABLE expenses ADD COLUMN account_id INT UNSIGNED DEFAULT NULL AFTER user_id")
+    if "transaction_type" not in columns:
+        execute_db("ALTER TABLE expenses ADD COLUMN transaction_type ENUM('expense','income') NOT NULL DEFAULT 'expense' AFTER amount")
+    execute_db(
+        """INSERT IGNORE INTO expense_categories (user_id, name)
+        SELECT DISTINCT user_id, category FROM expenses WHERE category <> ''"""
+    )
 
 
 def slugify(value):
@@ -372,6 +473,7 @@ def media_response(row):
 
 
 ensure_family_tables()
+ensure_finance_tables()
 
 
 # ============================================================
@@ -408,7 +510,7 @@ def require_auth(function):
         try:
             user = query_db(
                 """
-                SELECT id, first_name, last_name, username, email, phone
+                SELECT id, first_name, last_name, username, email, phone, occupation
                 FROM users WHERE id = %s
                 """,
                 (user_id,),
@@ -461,9 +563,13 @@ def signup():
     email = clean_string(data.get("email"), 254).casefold()
     password = data.get("password")
     phone = clean_string(data.get("phone"), 40)
+    occupation = clean_string(data.get("occupation"), 30).casefold()
+    allowed_occupations = {"student", "employed", "self_employed", "homemaker", "caregiver", "retired", "other"}
 
-    if not all([first_name, last_name, username, email, password, phone]):
+    if not all([first_name, last_name, username, email, password, phone, occupation]):
         return api_error("All fields are required.")
+    if occupation not in allowed_occupations:
+        return api_error("Choose a valid occupation.")
 
     if not re.fullmatch(r"[a-z0-9_.-]{3,50}", username):
         return api_error("Username must be 3-50 characters using letters, numbers, _, . or -.")
@@ -488,10 +594,10 @@ def signup():
         result = execute_db(
             """
             INSERT INTO users
-                (first_name, last_name, username, password, email, phone)
-            VALUES (%s, %s, %s, %s, %s, %s)
+                (first_name, last_name, username, password, email, phone, occupation)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (first_name, last_name, username, password_hash, email, phone)
+            (first_name, last_name, username, password_hash, email, phone, occupation)
         )
         family_id = ensure_default_family_for_user(result["lastrowid"])
         return jsonify({
@@ -533,7 +639,7 @@ def signin():
 
         public_user = query_db(
             """
-            SELECT id, first_name, last_name, username, email, phone
+            SELECT id, first_name, last_name, username, email, phone, occupation
             FROM users WHERE id = %s
             """,
             (user["id"],),
@@ -578,25 +684,29 @@ def update_profile():
     first_name = clean_string(data.get("first_name"), 100)
     last_name = clean_string(data.get("last_name"), 100)
     email = clean_string(data.get("email"), 254).casefold()
+    occupation = clean_string(data.get("occupation", g.user.get("occupation", "other")), 30).casefold()
+    allowed_occupations = {"student", "employed", "self_employed", "homemaker", "caregiver", "retired", "other"}
 
     if not first_name or not last_name:
         return api_error("First name and last name are required.")
 
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         return api_error("Enter a valid email address.")
+    if occupation not in allowed_occupations:
+        return api_error("Choose a valid occupation.")
 
     try:
         execute_db(
             """
             UPDATE users
-            SET first_name = %s, last_name = %s, email = %s
+            SET first_name = %s, last_name = %s, email = %s, occupation = %s
             WHERE id = %s
             """,
-            (first_name, last_name, email, g.user["id"])
+            (first_name, last_name, email, occupation, g.user["id"])
         )
         user = query_db(
             """
-            SELECT id, first_name, last_name, username, email, phone
+            SELECT id, first_name, last_name, username, email, phone, occupation
             FROM users WHERE id = %s
             """,
             (g.user["id"],),
@@ -737,8 +847,254 @@ def delete_project(project_id):
 
 
 # ============================================================
+# FINANCE ACCOUNTS AND CATEGORIES
+# ============================================================
+
+@app.route("/api/finance/accounts", methods=["GET"])
+@require_auth
+def get_finance_accounts():
+    try:
+        rows = query_db(
+            "SELECT id, name, balance, created_at FROM finance_accounts WHERE user_id=%s ORDER BY id",
+            (g.user["id"],),
+        )
+        return jsonify({"accounts": rows}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("get finance accounts")
+
+
+@app.route("/api/finance/accounts", methods=["POST"])
+@require_auth
+def create_finance_account():
+    data = get_data()
+    name = clean_string(data.get("name"), 100)
+    balance = parse_amount(data.get("balance", 0))
+    if not name or balance is None:
+        return api_error("Account name and a valid non-negative opening balance are required.")
+    try:
+        result = execute_db(
+            "INSERT INTO finance_accounts (user_id, name, balance) VALUES (%s, %s, %s)",
+            (g.user["id"], name, balance),
+        )
+        return jsonify({"message": "Account created.", "account_id": result["lastrowid"]}), 201
+    except pymysql.err.IntegrityError:
+        return api_error("An account with that name already exists.", 409)
+    except pymysql.MySQLError:
+        return handle_database_error("create finance account")
+
+
+@app.route("/api/finance/accounts/<int:account_id>", methods=["DELETE"])
+@require_auth
+def delete_finance_account(account_id):
+    try:
+        linked_expense = query_db(
+            "SELECT id FROM expenses WHERE account_id=%s AND user_id=%s LIMIT 1",
+            (account_id, g.user["id"]), fetchone=True,
+        )
+        linked_goal = query_db(
+            "SELECT id FROM goal_contributions WHERE account_id=%s AND user_id=%s LIMIT 1",
+            (account_id, g.user["id"]), fetchone=True,
+        )
+        if linked_expense or linked_goal:
+            return api_error("This account has transaction or goal history and cannot be deleted.", 409)
+        result = execute_db("DELETE FROM finance_accounts WHERE id=%s AND user_id=%s", (account_id, g.user["id"]))
+        if not result["rowcount"]:
+            return api_error("Account not found.", 404)
+        return jsonify({"message": "Account deleted."}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("delete finance account")
+
+
+@app.route("/api/finance/categories", methods=["GET"])
+@require_auth
+def get_expense_categories():
+    try:
+        rows = query_db(
+            "SELECT id, name FROM expense_categories WHERE user_id=%s ORDER BY name",
+            (g.user["id"],),
+        )
+        return jsonify({"categories": rows}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("get expense categories")
+
+
+@app.route("/api/finance/categories", methods=["POST"])
+@require_auth
+def create_expense_category():
+    name = clean_string(get_data().get("name"), 100)
+    if not name:
+        return api_error("Category name is required.")
+    try:
+        result = execute_db(
+            "INSERT INTO expense_categories (user_id, name) VALUES (%s, %s)",
+            (g.user["id"], name),
+        )
+        return jsonify({"message": "Category created.", "category_id": result["lastrowid"]}), 201
+    except pymysql.err.IntegrityError:
+        return api_error("That category already exists.", 409)
+    except pymysql.MySQLError:
+        return handle_database_error("create expense category")
+
+
+# ============================================================
 # EXPENSES CRUD
 # ============================================================
+
+@app.route("/api/finance/budgets", methods=["GET"])
+@require_auth
+def get_finance_budgets():
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+    year_start = today.replace(month=1, day=1)
+    period_starts = {
+        "daily": today,
+        "weekly": week_start,
+        "monthly": month_start,
+        "yearly": year_start,
+    }
+    try:
+        budgets = query_db(
+            "SELECT id, category, amount, period, created_at FROM finance_budgets WHERE user_id=%s ORDER BY id DESC",
+            (g.user["id"],),
+        )
+        rows = query_db(
+            """SELECT category, expense_date, SUM(amount) AS spent FROM expenses
+            WHERE user_id=%s AND transaction_type='expense' AND expense_date >= %s AND expense_date <= %s
+            GROUP BY category, expense_date""",
+            (g.user["id"], min(period_starts.values()), today),
+        )
+        totals = {period: {} for period in period_starts}
+        for row in rows:
+            amount = Decimal(row["spent"] or 0)
+            for period, start_date in period_starts.items():
+                if row["expense_date"] >= start_date:
+                    category_totals = totals[period]
+                    category_totals[row["category"]] = category_totals.get(row["category"], Decimal(0)) + amount
+        for budget in budgets:
+            budget["spent"] = totals[budget["period"]].get(budget["category"], Decimal(0))
+        return jsonify({"budgets": budgets}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("get finance budgets")
+
+
+@app.route("/api/finance/budgets", methods=["POST"])
+@require_auth
+def create_finance_budget():
+    data = get_data()
+    category = clean_string(data.get("category"), 100)
+    amount = parse_amount(data.get("amount"))
+    period = clean_string(data.get("period") or "monthly", 20).casefold()
+    if not category or amount is None or amount <= 0 or period not in {"daily", "weekly", "monthly", "yearly"}:
+        return api_error("Choose a category, a positive budget amount, and a valid period.")
+    try:
+        result = execute_db(
+            "INSERT INTO finance_budgets (user_id, category, amount, period) VALUES (%s, %s, %s, %s)",
+            (g.user["id"], category, amount, period),
+        )
+        return jsonify({"message": "Budget created.", "budget_id": result["lastrowid"]}), 201
+    except pymysql.MySQLError:
+        return handle_database_error("create finance budget")
+
+
+@app.route("/api/finance/budgets/<int:budget_id>", methods=["DELETE"])
+@require_auth
+def delete_finance_budget(budget_id):
+    try:
+        result = execute_db("DELETE FROM finance_budgets WHERE id=%s AND user_id=%s", (budget_id, g.user["id"]))
+        if not result["rowcount"]:
+            return api_error("Budget not found.", 404)
+        return jsonify({"message": "Budget deleted."}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("delete finance budget")
+
+
+@app.route("/api/finance/goals", methods=["GET"])
+@require_auth
+def get_financial_goals():
+    try:
+        rows = query_db(
+            """SELECT g.id, g.title, g.target_amount, g.target_date, g.created_at,
+            COALESCE(SUM(c.amount), 0) AS saved_amount, COALESCE(SUM(c.xp), 0) AS xp
+            FROM financial_goals g LEFT JOIN goal_contributions c ON c.goal_id=g.id AND c.user_id=g.user_id
+            WHERE g.user_id=%s GROUP BY g.id ORDER BY g.id DESC""",
+            (g.user["id"],),
+        )
+        return jsonify({"goals": rows}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("get financial goals")
+
+
+@app.route("/api/finance/goals", methods=["POST"])
+@require_auth
+def create_financial_goal():
+    data = get_data()
+    title = clean_string(data.get("title"), 150)
+    target = parse_amount(data.get("target_amount"))
+    target_date = parse_date(data.get("target_date"), optional=True)
+    if not title or target is None or target <= 0:
+        return api_error("Goal name and a positive target amount are required.")
+    if target_date is False:
+        return api_error("Use a valid target date in YYYY-MM-DD format.")
+    try:
+        result = execute_db(
+            "INSERT INTO financial_goals (user_id, title, target_amount, target_date) VALUES (%s, %s, %s, %s)",
+            (g.user["id"], title, target, target_date),
+        )
+        return jsonify({"message": "Goal created.", "goal_id": result["lastrowid"]}), 201
+    except pymysql.MySQLError:
+        return handle_database_error("create financial goal")
+
+
+@app.route("/api/finance/goals/<int:goal_id>", methods=["DELETE"])
+@require_auth
+def delete_financial_goal(goal_id):
+    try:
+        result = execute_db("DELETE FROM financial_goals WHERE id=%s AND user_id=%s", (goal_id, g.user["id"]))
+        if not result["rowcount"]:
+            return api_error("Financial goal not found.", 404)
+        return jsonify({"message": "Financial goal deleted."}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("delete financial goal")
+
+
+@app.route("/api/finance/goals/<int:goal_id>/contributions", methods=["POST"])
+@require_auth
+def contribute_to_financial_goal(goal_id):
+    data = get_data()
+    amount = parse_amount(data.get("amount"))
+    account_id = parse_id(data.get("account_id"))
+    if amount is None or amount <= 0 or not account_id:
+        return api_error("Choose an account and enter a positive contribution.")
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id FROM financial_goals WHERE id=%s AND user_id=%s FOR UPDATE", (goal_id, g.user["id"]))
+            if not cursor.fetchone():
+                connection.rollback()
+                return api_error("Financial goal not found.", 404)
+            cursor.execute("SELECT balance FROM finance_accounts WHERE id=%s AND user_id=%s FOR UPDATE", (account_id, g.user["id"]))
+            account = cursor.fetchone()
+            if not account:
+                connection.rollback()
+                return api_error("Account not found.", 404)
+            if Decimal(account["balance"]) < amount:
+                connection.rollback()
+                return api_error("That account does not have enough money for this contribution.", 409)
+            xp = max(1, int(amount // Decimal("100")))
+            cursor.execute("UPDATE finance_accounts SET balance=balance-%s WHERE id=%s", (amount, account_id))
+            cursor.execute(
+                "INSERT INTO goal_contributions (goal_id, user_id, account_id, amount, xp) VALUES (%s, %s, %s, %s, %s)",
+                (goal_id, g.user["id"], account_id, amount, xp),
+            )
+        connection.commit()
+        return jsonify({"message": "Goal contribution saved.", "xp_earned": xp}), 201
+    except pymysql.MySQLError:
+        connection.rollback()
+        return handle_database_error("contribute to financial goal")
+    finally:
+        connection.close()
+
 
 @app.route("/api/expenses", methods=["GET"])
 @require_auth
@@ -746,9 +1102,11 @@ def get_expenses():
     try:
         rows = query_db(
             """
-            SELECT id, title, amount, category, expense_date, created_at
-            FROM expenses WHERE user_id = %s
-            ORDER BY expense_date DESC, id DESC
+            SELECT e.id, e.title, e.amount, e.category, e.expense_date, e.created_at,
+                e.account_id, e.transaction_type, a.name AS account_name
+            FROM expenses e LEFT JOIN finance_accounts a ON a.id=e.account_id
+            WHERE e.user_id = %s
+            ORDER BY e.expense_date DESC, e.id DESC
             """,
             (g.user["id"],)
         )
@@ -765,26 +1123,45 @@ def create_expense():
     category = clean_string(data.get("category"), 100)
     amount = parse_amount(data.get("amount"))
     expense_date = parse_date(data.get("expense_date"), optional=True)
+    account_id = parse_id(data.get("account_id"))
+    transaction_type = clean_string(data.get("transaction_type") or "expense", 20).casefold()
 
-    if not title or not category or amount is None:
-        return api_error("Title, category and a valid non-negative amount are required.")
+    if not title or not category or amount is None or amount <= 0 or not account_id:
+        return api_error("Title, category, account and a valid positive amount are required.")
+    if transaction_type not in {"expense", "income"}:
+        return api_error("Choose either an expense or income transaction.")
     if expense_date is False:
         return api_error("Use a valid date in YYYY-MM-DD format.")
 
+    connection = get_db_connection()
     try:
-        result = execute_db(
-            """
-            INSERT INTO expenses (user_id, title, amount, category, expense_date)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (g.user["id"], title, amount, category, expense_date or date.today())
-        )
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT balance FROM finance_accounts WHERE id=%s AND user_id=%s FOR UPDATE", (account_id, g.user["id"]))
+            account = cursor.fetchone()
+            if not account:
+                connection.rollback()
+                return api_error("Account not found.", 404)
+            if transaction_type == "expense" and Decimal(account["balance"]) < amount:
+                connection.rollback()
+                return api_error("That account does not have enough money for this expense.", 409)
+            balance_delta = amount if transaction_type == "income" else -amount
+            cursor.execute("UPDATE finance_accounts SET balance=balance+%s WHERE id=%s", (balance_delta, account_id))
+            cursor.execute(
+                """INSERT INTO expenses (user_id, account_id, transaction_type, title, amount, category, expense_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                (g.user["id"], account_id, transaction_type, title, amount, category, expense_date or date.today()),
+            )
+            expense_id = cursor.lastrowid
+        connection.commit()
         return jsonify({
-            "message": "Expense recorded.",
-            "expense_id": result["lastrowid"]
+            "message": "Income recorded." if transaction_type == "income" else "Expense recorded.",
+            "expense_id": expense_id
         }), 201
     except pymysql.MySQLError:
+        connection.rollback()
         return handle_database_error("create expense")
+    finally:
+        connection.close()
 
 
 @app.route("/api/expenses/<int:expense_id>", methods=["PATCH"])
@@ -817,43 +1194,106 @@ def update_expense(expense_id):
             return api_error("Use a valid date in YYYY-MM-DD format.")
         updates["expense_date"] = expense_date
 
+    if "transaction_type" in data:
+        transaction_type = clean_string(data["transaction_type"], 20).casefold()
+        if transaction_type not in {"expense", "income"}:
+            return api_error("Choose either an expense or income transaction.")
+        updates["transaction_type"] = transaction_type
+
+    if "account_id" in data:
+        account_id = parse_id(data["account_id"])
+        if not account_id:
+            return api_error("Choose a valid account.")
+        updates["account_id"] = account_id
+
     if not updates:
         return api_error("Provide fields to update.")
 
-    columns = ", ".join(f"{key} = %s" for key in updates)
-    params = list(updates.values()) + [expense_id, g.user["id"]]
-
+    connection = get_db_connection()
     try:
-        result = execute_db(
-            f"UPDATE expenses SET {columns} WHERE id=%s AND user_id=%s",
-            params
-        )
-        if not result["rowcount"]:
-            exists = query_db(
-                "SELECT id FROM expenses WHERE id=%s AND user_id=%s",
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT account_id, amount, transaction_type FROM expenses WHERE id=%s AND user_id=%s FOR UPDATE",
                 (expense_id, g.user["id"]),
-                fetchone=True
             )
-            if not exists:
+            existing = cursor.fetchone()
+            if not existing:
+                connection.rollback()
                 return api_error("Expense not found.", 404)
+            old_account_id = existing["account_id"]
+            next_account_id = updates.get("account_id", old_account_id)
+            next_amount = Decimal(updates.get("amount", existing["amount"]))
+            next_type = updates.get("transaction_type", existing["transaction_type"])
+            account_ids = sorted({value for value in (old_account_id, next_account_id) if value})
+            balances = {}
+            for current_id in account_ids:
+                cursor.execute("SELECT balance FROM finance_accounts WHERE id=%s AND user_id=%s FOR UPDATE", (current_id, g.user["id"]))
+                account = cursor.fetchone()
+                if not account:
+                    connection.rollback()
+                    return api_error("Account not found.", 404)
+                balances[current_id] = Decimal(account["balance"])
+
+            changes = {}
+            if old_account_id:
+                old_amount = Decimal(existing["amount"])
+                changes[old_account_id] = old_amount if existing["transaction_type"] == "expense" else -old_amount
+            if next_account_id:
+                next_delta = -next_amount if next_type == "expense" else next_amount
+                changes[next_account_id] = changes.get(next_account_id, Decimal(0)) + next_delta
+            for current_id, delta in changes.items():
+                if balances[current_id] + delta < 0:
+                    connection.rollback()
+                    return api_error("That account does not have enough money for this expense.", 409)
+                cursor.execute("UPDATE finance_accounts SET balance=balance+%s WHERE id=%s", (delta, current_id))
+
+            columns = ", ".join(f"{key}=%s" for key in updates)
+            cursor.execute(
+                f"UPDATE expenses SET {columns} WHERE id=%s AND user_id=%s",
+                list(updates.values()) + [expense_id, g.user["id"]],
+            )
+        connection.commit()
         return jsonify({"message": "Expense updated."}), 200
     except pymysql.MySQLError:
+        connection.rollback()
         return handle_database_error("update expense")
+    finally:
+        connection.close()
 
 
 @app.route("/api/expenses/<int:expense_id>", methods=["DELETE"])
 @require_auth
 def delete_expense(expense_id):
+    connection = get_db_connection()
     try:
-        result = execute_db(
-            "DELETE FROM expenses WHERE id=%s AND user_id=%s",
-            (expense_id, g.user["id"])
-        )
-        if not result["rowcount"]:
-            return api_error("Expense not found.", 404)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT account_id, amount, transaction_type FROM expenses WHERE id=%s AND user_id=%s FOR UPDATE",
+                (expense_id, g.user["id"]),
+            )
+            expense = cursor.fetchone()
+            if not expense:
+                connection.rollback()
+                return api_error("Expense not found.", 404)
+            if expense["account_id"]:
+                cursor.execute("SELECT balance FROM finance_accounts WHERE id=%s AND user_id=%s FOR UPDATE", (expense["account_id"], g.user["id"]))
+                account = cursor.fetchone()
+                if not account:
+                    connection.rollback()
+                    return api_error("Account not found.", 404)
+                if expense["transaction_type"] == "income" and Decimal(account["balance"]) < Decimal(expense["amount"]):
+                    connection.rollback()
+                    return api_error("This income has already been spent and cannot be removed without an account deficit.", 409)
+                delta = -Decimal(expense["amount"]) if expense["transaction_type"] == "income" else Decimal(expense["amount"])
+                cursor.execute("UPDATE finance_accounts SET balance=balance+%s WHERE id=%s", (delta, expense["account_id"]))
+            cursor.execute("DELETE FROM expenses WHERE id=%s AND user_id=%s", (expense_id, g.user["id"]))
+        connection.commit()
         return jsonify({"message": "Expense deleted."}), 200
     except pymysql.MySQLError:
+        connection.rollback()
         return handle_database_error("delete expense")
+    finally:
+        connection.close()
 
 
 # ============================================================
@@ -1078,6 +1518,79 @@ def delete_note(note_id):
 # ============================================================
 # FAMILY CLOUD FILES
 # ============================================================
+
+@app.route("/api/family/invites", methods=["POST"])
+@require_auth
+def create_family_invite():
+    family = get_family_for_user(g.user["id"])
+    if not family:
+        family_id = ensure_default_family_for_user(g.user["id"])
+        family = get_family_for_user(g.user["id"]) if family_id else None
+    if not family:
+        return api_error("A family workspace is required to create an invite.", 400)
+    if family["role"] not in {"owner", "admin"}:
+        return api_error("Only a family owner or admin can invite another account.", 403)
+
+    code = secrets.token_hex(16).upper()
+    try:
+        execute_db(
+            """INSERT INTO family_invites (family_id, created_by, code_hash, expires_at)
+            VALUES (%s, %s, %s, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 7 DAY))""",
+            (family["id"], g.user["id"], invite_digest(code)),
+        )
+        return jsonify({"message": "Family invite created.", "code": code, "expires_in_days": 7}), 201
+    except pymysql.MySQLError:
+        return handle_database_error("create family invite")
+
+
+@app.route("/api/family/join", methods=["POST"])
+@require_auth
+def join_family():
+    code = clean_string(get_data().get("code"), 64).upper()
+    if not code:
+        return api_error("Enter a family invite code.")
+
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT family_id FROM family_invites WHERE code_hash=%s AND expires_at > UTC_TIMESTAMP() FOR UPDATE",
+                (invite_digest(code),),
+            )
+            invite = cursor.fetchone()
+            if not invite:
+                connection.rollback()
+                return api_error("That family invite is invalid or expired.", 404)
+
+            target_family_id = invite["family_id"]
+            cursor.execute("SELECT family_id FROM family_members WHERE user_id=%s FOR UPDATE", (g.user["id"],))
+            memberships = cursor.fetchall()
+            source_family_ids = sorted({row["family_id"] for row in memberships if row["family_id"] != target_family_id})
+            cursor.execute(
+                "INSERT IGNORE INTO family_members (family_id, user_id, role) VALUES (%s, %s, 'member')",
+                (target_family_id, g.user["id"]),
+            )
+
+            for source_family_id in source_family_ids:
+                cursor.execute("UPDATE family_files SET family_id=%s WHERE family_id=%s", (target_family_id, source_family_id))
+                cursor.execute("SELECT user_id, role, joined_at FROM family_members WHERE family_id=%s", (source_family_id,))
+                source_members = cursor.fetchall()
+                for member in source_members:
+                    role = "admin" if member["role"] == "owner" else member["role"]
+                    cursor.execute(
+                        "INSERT IGNORE INTO family_members (family_id, user_id, role, joined_at) VALUES (%s, %s, %s, %s)",
+                        (target_family_id, member["user_id"], role, member["joined_at"]),
+                    )
+                cursor.execute("DELETE FROM family_members WHERE family_id=%s", (source_family_id,))
+                cursor.execute("DELETE FROM families WHERE id=%s", (source_family_id,))
+
+        connection.commit()
+        return jsonify({"message": "This account and its family archive are now connected.", "merged_families": len(source_family_ids)}), 200
+    except pymysql.MySQLError:
+        connection.rollback()
+        return handle_database_error("join family")
+    finally:
+        connection.close()
 
 @app.route("/api/files", methods=["GET"])
 @require_auth
@@ -1361,7 +1874,7 @@ def dashboard_stats():
             """
             SELECT COUNT(*) AS total,
                    COALESCE(SUM(amount), 0) AS total_amount
-            FROM expenses WHERE user_id=%s
+            FROM expenses WHERE user_id=%s AND transaction_type='expense'
             """,
             (user_id,), fetchone=True
         )
