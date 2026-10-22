@@ -50,6 +50,51 @@ function currency(value) {
     : 'KES --'
 }
 
+function amountInCents(value) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? Math.round(amount * 100) : 0
+}
+
+function expenseDateKey(value) {
+  const text = String(value || '')
+  const isoDate = text.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (isoDate) return isoDate[1]
+  const date = new Date(text)
+  return Number.isNaN(date.getTime())
+    ? ''
+    : `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
+}
+
+function donutSlicePath(startAngle, endAngle) {
+  const point = (radius, angle) => {
+    const radians = (angle - 90) * Math.PI / 180
+    return [100 + radius * Math.cos(radians), 100 + radius * Math.sin(radians)]
+  }
+  const [outerStartX, outerStartY] = point(78, startAngle)
+  const [outerEndX, outerEndY] = point(78, endAngle)
+  const [innerStartX, innerStartY] = point(48, startAngle)
+  const [innerEndX, innerEndY] = point(48, endAngle)
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0
+  return `M ${outerStartX} ${outerStartY} A 78 78 0 ${largeArc} 1 ${outerEndX} ${outerEndY} L ${innerEndX} ${innerEndY} A 48 48 0 ${largeArc} 0 ${innerStartX} ${innerStartY} Z`
+}
+
+function buildDonutSlices(items, totalCents, colors) {
+  return items.reduce((result, item, index) => {
+    const startAngle = result.angle
+    const endAngle = startAngle + item.cents / totalCents * 360
+    return {
+      angle: endAngle,
+      slices: [...result.slices, {
+        ...item,
+        color: colors[index % colors.length],
+        startAngle,
+        endAngle,
+        percentage: item.cents / totalCents * 100,
+      }],
+    }
+  }, { angle: 0, slices: [] }).slices
+}
+
 function initials(user) {
   return `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`.toUpperCase() || 'F'
 }
@@ -541,6 +586,14 @@ function ProjectsPage({ projects, error, onCreate, onEdit, onDelete }) {
   </>
 }
 
+function DonutChart({ slices, total, totalLabel, description }) {
+  return <div className="category-donut-wrap"><svg className="category-donut" viewBox="0 0 200 200" role="img" aria-label={description}><circle className="donut-track" cx="100" cy="100" r="63" />{slices.length === 1 ? <circle cx="100" cy="100" r="63" fill="none" stroke={slices[0].color} strokeWidth="30"><title>{`${slices[0].name}: ${currency(slices[0].total)}`}</title></circle> : slices.map((slice) => <path key={slice.name} d={donutSlicePath(slice.startAngle, slice.endAngle)} fill={slice.color} stroke="#111318" strokeWidth="2"><title>{`${slice.name}: ${currency(slice.total)} (${slice.percentage.toFixed(1)}%)`}</title></path>)}</svg><div className="category-donut-total"><strong>{currency(total)}</strong><span>{totalLabel}</span></div></div>
+}
+
+function PieLegend({ slices }) {
+  return <div className="category-pie-legend">{slices.map((slice) => <div className="category-pie-item" key={slice.name}><span className="category-pie-label"><i style={{ backgroundColor: slice.color }} />{slice.name}</span><strong>{slice.percentage.toFixed(1)}%</strong><small>{currency(slice.total)}</small></div>)}</div>
+}
+
 function FinancePage({ expenses, accounts, categories: savedCategories, budgets, goals, error, financeError, onCreate, onEdit, onDelete, onContribute }) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
@@ -550,20 +603,44 @@ function FinancePage({ expenses, accounts, categories: savedCategories, budgets,
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)
   const filtered = expenses.filter((expense) => {
-    const transactionDate = expense.expense_date ? new Date(`${String(expense.expense_date).slice(0, 10)}T00:00:00`) : null
+    const dateKey = expenseDateKey(expense.expense_date)
+    const transactionDate = dateKey ? new Date(`${dateKey}T00:00:00`) : null
     const dateMatches = dateRange === 'all' || (transactionDate && transactionDate >= (dateRange === 'month' ? monthStart : thirtyDaysAgo) && transactionDate <= now)
     return dateMatches && (category === 'all' || expense.category === category) && `${expense.title} ${expense.category} ${expense.account_name || ''}`.toLowerCase().includes(query.toLowerCase())
   })
-  const spendingTotal = expenses.filter((item) => item.transaction_type !== 'income').reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
-  const incomeTotal = expenses.filter((item) => item.transaction_type === 'income').reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+  const spendingCents = expenses.filter((item) => item.transaction_type !== 'income').reduce((sum, item) => sum + amountInCents(item.amount), 0)
+  const incomeCents = expenses.filter((item) => item.transaction_type === 'income').reduce((sum, item) => sum + amountInCents(item.amount), 0)
+  const spendingTotal = spendingCents / 100
+  const incomeTotal = incomeCents / 100
   const totalBalance = accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0)
-  const categoryTotals = categories.map((name) => ({ name, total: expenses.filter((item) => item.category === name && item.transaction_type !== 'income').reduce((sum, item) => sum + (Number(item.amount) || 0), 0) })).filter((item) => item.total > 0).sort((first, second) => second.total - first.total)
-  const maxCategory = Math.max(1, ...categoryTotals.map((item) => item.total))
+  const categoryCents = new Map()
+  expenses.forEach((item) => {
+    if (item.transaction_type === 'income') return
+    const name = item.category || 'Uncategorized'
+    categoryCents.set(name, (categoryCents.get(name) || 0) + amountInCents(item.amount))
+  })
+  const categoryTotals = [...categoryCents].map(([name, cents]) => ({ name, cents, total: cents / 100 }))
+    .filter((item) => item.cents > 0)
+    .sort((first, second) => second.cents - first.cents)
+  const pieColors = ['#df5964', '#d19d58', '#6da8d1', '#6cb88a', '#a18ad1', '#d784b1']
+  const pieCategories = categoryTotals.length > 6
+    ? [...categoryTotals.slice(0, 5), { name: 'Other', cents: categoryTotals.slice(5).reduce((sum, item) => sum + item.cents, 0) }]
+    : categoryTotals
+  const pieSlices = buildDonutSlices(pieCategories, spendingCents, pieColors)
+  const cashFlowCents = spendingCents + incomeCents
+  const cashFlowSlices = buildDonutSlices([
+    { name: 'Spending', cents: spendingCents, total: spendingTotal },
+    { name: 'Income', cents: incomeCents, total: incomeTotal },
+  ].filter((item) => item.cents > 0), cashFlowCents, ['#df5964', '#6cb88a'])
   const monthlyTrend = Array.from({ length: 6 }, (_, index) => {
     const month = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1)
     const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
-    const monthly = expenses.filter((item) => String(item.expense_date || '').slice(0, 7) === key)
-    return { label: new Intl.DateTimeFormat('en-KE', { month: 'short' }).format(month), spent: monthly.filter((item) => item.transaction_type !== 'income').reduce((sum, item) => sum + Number(item.amount || 0), 0), income: monthly.filter((item) => item.transaction_type === 'income').reduce((sum, item) => sum + Number(item.amount || 0), 0) }
+    const monthly = expenses.filter((item) => expenseDateKey(item.expense_date).slice(0, 7) === key)
+    return {
+      label: new Intl.DateTimeFormat('en-KE', { month: 'short' }).format(month),
+      spent: monthly.filter((item) => item.transaction_type !== 'income').reduce((sum, item) => sum + amountInCents(item.amount), 0) / 100,
+      income: monthly.filter((item) => item.transaction_type === 'income').reduce((sum, item) => sum + amountInCents(item.amount), 0) / 100,
+    }
   })
   const maxMonth = Math.max(1, ...monthlyTrend.flatMap((month) => [month.spent, month.income]))
   const incomeLinePoints = monthlyTrend.map((month, index) => `${index * 100 + 50},${94 - month.income / maxMonth * 84}`).join(' ')
@@ -571,7 +648,7 @@ function FinancePage({ expenses, accounts, categories: savedCategories, budgets,
   const dailyTrend = Array.from({ length: 14 }, (_, index) => {
     const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13 + index)
     const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
-    const cents = expenses.filter((item) => item.transaction_type !== 'income' && String(item.expense_date || '').slice(0, 10) === key).reduce((sum, item) => sum + Math.round(Number(item.amount || 0) * 100), 0)
+    const cents = expenses.filter((item) => item.transaction_type !== 'income' && expenseDateKey(item.expense_date) === key).reduce((sum, item) => sum + amountInCents(item.amount), 0)
     return { key, label: String(day.getDate()), date: new Intl.DateTimeFormat('en-KE', { day: 'numeric', month: 'short' }).format(day), spent: cents / 100 }
   })
   const maxDailySpend = Math.max(0.01, ...dailyTrend.map((day) => day.spent))
@@ -588,7 +665,8 @@ function FinancePage({ expenses, accounts, categories: savedCategories, budgets,
     <div className="finance-summary"><section className="finance-total"><div><p className="eyebrow">TOTAL SPENDING</p><span className="finance-value">{currency(spendingTotal)}</span><small>{expenses.filter((item) => item.transaction_type !== 'income').length} expenses recorded</small></div><span className="finance-total-icon"><CreditCard size={21} /></span></section><section className="finance-insight"><span className="insight-symbol"><ArrowUpRight size={17} /></span><div><p className="eyebrow">INCOME RECORDED</p><strong>{currency(incomeTotal)}</strong><small>{categories.length} reusable categories</small></div></section></div>
     <div className="finance-chart-grid">
       <section className="panel finance-chart-panel"><PanelHeading title="Cash flow" kicker="LAST SIX MONTHS" /><div className="chart-legend"><span><i className="legend-spending" />Spending</span><span><i className="legend-income" />Income</span></div><div className="month-chart" role="img" aria-label="Monthly spending bars and income trend line for the last six months">{monthlyTrend.map((month, index) => <div className="month-chart-column" key={`${month.label}-${month.spent}-${month.income}`}><div className="month-bars"><span className="month-bar month-bar-spending" title={`Spending ${currency(month.spent)}`} style={{ height: `${month.spent ? Math.max(3, month.spent / maxMonth * 100) : 0}%`, animationDelay: `${index * 65}ms` }} /></div><span>{month.label}</span></div>)}<svg key={chartKey} className="income-line-chart" viewBox="0 0 600 100" preserveAspectRatio="none" aria-hidden="true"><polyline pathLength="1" points={incomeLinePoints} /><g>{monthlyTrend.map((month, index) => <circle key={month.label} cx={index * 100 + 50} cy={94 - month.income / maxMonth * 84} r="3.2"><title>{`${month.label} income: ${currency(month.income)}`}</title></circle>)}</g></svg></div></section>
-      <section className="panel finance-chart-panel"><PanelHeading title="Spending by category" kicker="ALL RECORDED" />{categoryTotals.length ? <div className="category-breakdown">{categoryTotals.slice(0, 6).map(({ name, total: amount }, index) => <div className="category-row" key={name}><div className="category-row-top"><span>{name}</span><strong>{currency(amount)}</strong></div><div className="category-track"><span style={{ width: `${Math.max(2, amount / maxCategory * 100)}%` }} className={`category-fill category-fill-${index % 4}`} /></div></div>)}</div> : <p className="chart-empty">Category totals appear after expenses are recorded.</p>}</section>
+      <section className="panel finance-chart-panel"><PanelHeading title="Spending by category" kicker="ALL RECORDED" />{pieSlices.length ? <div className="category-pie-layout"><DonutChart slices={pieSlices} total={spendingTotal} totalLabel="Total spending" description={`Spending by category: ${pieSlices.map((slice) => `${slice.name} ${slice.percentage.toFixed(1)} percent`).join(', ')}`} /><PieLegend slices={pieSlices} /></div> : <p className="chart-empty">Category totals appear after expenses are recorded.</p>}</section>
+      <section className="panel finance-chart-panel"><PanelHeading title="Income vs spending" kicker="ALL RECORDED" />{cashFlowSlices.length ? <div className="category-pie-layout"><DonutChart slices={cashFlowSlices} total={cashFlowCents / 100} totalLabel="Total recorded" description={`Recorded cash flow: ${cashFlowSlices.map((slice) => `${slice.name} ${slice.percentage.toFixed(1)} percent`).join(', ')}`} /><PieLegend slices={cashFlowSlices} /></div> : <p className="chart-empty">Income and spending appear after transactions are recorded.</p>}</section>
       <section className="panel finance-chart-panel daily-chart-panel"><PanelHeading title="Daily spending" kicker="LAST 14 DAYS" /><div className="chart-legend"><span><i className="legend-daily" />Expenses by day</span><span className="daily-scale">Scale max: {currency(maxDailySpend)}</span></div><div className="month-chart daily-chart" role="img" aria-label="Daily expenses over the last 14 days, scaled independently from income">{dailyTrend.map((day, index) => <div className="month-chart-column" key={`${day.key}-${day.spent}`}><div className="month-bars"><span className="month-bar month-bar-spending" title={`${day.date}: ${currency(day.spent)}`} style={{ height: `${day.spent ? Math.max(2, day.spent / maxDailySpend * 100) : 0}%`, animationDelay: `${index * 35}ms` }} /></div><span title={day.date}>{day.label}</span></div>)}<svg key={dailyChartKey} className="income-line-chart daily-line-chart" viewBox="0 0 1400 100" preserveAspectRatio="none" aria-hidden="true"><polyline pathLength="1" points={dailySpendingPoints} /><g>{dailyTrend.map((day, index) => <circle key={day.key} cx={index * 100 + 50} cy={94 - day.spent / maxDailySpend * 84} r={day.spent ? '3' : '1.5'}><title>{`${day.date}: ${currency(day.spent)}`}</title></circle>)}</g></svg></div></section>
     </div>
     <div className="finance-plan-grid">

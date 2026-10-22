@@ -1102,7 +1102,8 @@ def get_expenses():
     try:
         rows = query_db(
             """
-            SELECT e.id, e.title, e.amount, e.category, e.expense_date, e.created_at,
+            SELECT e.id, e.title, e.amount, e.category,
+                CAST(e.expense_date AS CHAR) AS expense_date, e.created_at,
                 e.account_id, e.transaction_type, a.name AS account_name
             FROM expenses e LEFT JOIN finance_accounts a ON a.id=e.account_id
             WHERE e.user_id = %s
