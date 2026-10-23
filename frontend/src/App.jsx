@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Activity, ArrowRight, ArrowUpRight, Bell, Blocks, BriefcaseBusiness,
-  Check, ChevronDown, CircleHelp, Copy, CreditCard, FileText, Folder, FolderKanban,
-  LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu, MoreHorizontal, Plus, Search,
-  Settings2, ShieldCheck, Terminal, Upload, Wallet, X,
+  Activity, ArrowRight, ArrowUpRight, Bell, Blocks, Check, CheckCircle2, ChevronDown,
+  CircleHelp, Clock3, Copy, CreditCard, FileText,
+  Folder, FolderKanban, Image, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu,
+  MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, StickyNote, Target,
+  Terminal, Upload, Users, Wallet, X,
 } from 'lucide-react'
 import { api, clearToken, getLastActivity, getToken, IDLE_TIMEOUT_MS, saveToken, touchSession } from './services/api'
 import './App.css'
@@ -532,31 +533,98 @@ function pageDescription(section) {
 
 function Overview({ data, errors, onNavigate, onCreate, occupation = 'other' }) {
   const profile = OCCUPATION_PROFILES[occupation] || OCCUPATION_PROFILES.other
-  const projectStats = data.stats?.projects
-  const taskStats = data.stats?.tasks
-  const expenseStats = data.stats?.expenses
+  const today = new Date()
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const monthKey = todayKey.slice(0, 7)
+  const openTasks = data.tasks.filter((task) => task.status !== 'completed')
+  const completedTasks = data.tasks.length - openTasks.length
+  const overdueTasks = openTasks.filter((task) => task.due_date && String(task.due_date).slice(0, 10) < todayKey)
+  const upcomingTasks = [...openTasks].sort((first, second) => {
+    const firstDue = first.due_date ? String(first.due_date).slice(0, 10) : '9999-99-99'
+    const secondDue = second.due_date ? String(second.due_date).slice(0, 10) : '9999-99-99'
+    return firstDue.localeCompare(secondDue)
+  }).slice(0, 3)
+  const activeProjects = data.projects.filter((project) => project.status === 'active')
+  const monthlyExpenses = data.expenses.filter((expense) => expense.transaction_type !== 'income' && expenseDateKey(expense.expense_date).slice(0, 7) === monthKey)
+  const monthlyIncome = data.expenses.filter((expense) => expense.transaction_type === 'income' && expenseDateKey(expense.expense_date).slice(0, 7) === monthKey)
+  const monthlySpend = monthlyExpenses.reduce((total, expense) => total + amountInCents(expense.amount), 0) / 100
+  const monthlyIncomeTotal = monthlyIncome.reduce((total, expense) => total + amountInCents(expense.amount), 0) / 100
+  const availableBalance = data.financeAccounts.reduce((total, account) => total + (Number(account.balance) || 0), 0)
+  const trackedBudget = data.budgets.reduce((mostUsed, budget) => {
+    const amount = Number(budget.amount) || 0
+    const spent = Number(budget.spent) || 0
+    return !mostUsed || (amount > 0 && spent / amount > (Number(mostUsed.spent) || 0) / (Number(mostUsed.amount) || 1))
+      ? budget
+      : mostUsed
+  }, null)
+  const budgetProgress = trackedBudget && Number(trackedBudget.amount)
+    ? Math.min(100, (Number(trackedBudget.spent) || 0) / Number(trackedBudget.amount) * 100)
+    : 0
+  const taskProgress = data.tasks.length ? Math.round(completedTasks / data.tasks.length * 100) : 0
   const stats = [
-    { label: 'Total projects', value: projectStats?.total, icon: BriefcaseBusiness, delta: projectStats ? `${projectStats.completed ?? 0} completed` : null, color: 'red', target: 'projects' },
-    { label: 'Active projects', value: errors.projects ? null : data.projects.filter((project) => project.status === 'active').length, icon: Activity, delta: errors.projects ? 'Unavailable' : projectStats ? `${Math.max(0, (projectStats.total || 0) - (projectStats.completed || 0))} in progress` : null, color: 'green', target: 'projects' },
-    { label: 'Open tasks', value: taskStats ? (taskStats.total || 0) - (taskStats.completed || 0) : null, icon: ListTodo, delta: taskStats ? `${taskStats.pending ?? 0} pending` : null, color: 'amber', target: 'workspace' },
-    { label: 'Recorded expenses', value: expenseStats?.total_amount != null ? currency(expenseStats.total_amount) : null, icon: CreditCard, delta: expenseStats ? `${expenseStats.total ?? 0} entries` : null, color: 'blue', target: 'finance' },
-  ].sort((first, second) => profile.priority.indexOf(first.label) - profile.priority.indexOf(second.label))
+    { label: 'Active projects', value: errors.projects ? null : activeProjects.length, icon: FolderKanban, delta: errors.projects ? 'Unavailable' : `${data.projects.length} total projects`, color: 'red', target: 'projects' },
+    { label: 'Open tasks', value: errors.tasks ? null : openTasks.length, icon: ListTodo, delta: errors.tasks ? 'Unavailable' : `${overdueTasks.length} overdue`, color: 'amber', target: 'workspace' },
+    { label: 'Spent this month', value: errors.expenses ? null : currency(monthlySpend), icon: CreditCard, delta: errors.expenses ? 'Unavailable' : `${monthlyExpenses.length} expense records`, color: 'blue', target: 'finance' },
+    { label: 'Shared library', value: errors.files ? null : data.files.length, icon: Image, delta: errors.files ? 'Unavailable' : `${data.familyMembers.length} connected members`, color: 'green', target: 'cloud' },
+  ]
   const updates = [
-    ...data.projects.slice(0, 2).map((item) => ({ title: item.title, detail: `Project ${item.status?.replace('_', ' ') || 'updated'}`, date: item.updated_at || item.created_at, icon: FolderKanban })),
-    ...data.tasks.slice(0, 2).map((item) => ({ title: item.title, detail: `Task ${item.status?.replace('_', ' ') || 'updated'}`, date: item.updated_at || item.created_at, icon: ListTodo })),
-    ...data.notes.slice(0, 1).map((item) => ({ title: item.title, detail: 'Note updated', date: item.updated_at || item.created_at, icon: FileText })),
-  ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 4)
+    ...data.projects.map((item) => ({ title: item.title, detail: `Project · ${item.status?.replace('_', ' ') || 'updated'}`, date: item.updated_at || item.created_at, icon: FolderKanban })),
+    ...data.tasks.map((item) => ({ title: item.title, detail: `Task · ${item.status?.replace('_', ' ') || 'updated'}`, date: item.updated_at || item.created_at, icon: ListTodo })),
+    ...data.notes.map((item) => ({ title: item.title, detail: 'Note · saved to workspace', date: item.updated_at || item.created_at, icon: StickyNote })),
+    ...data.expenses.map((item) => ({ title: item.title, detail: `${item.transaction_type === 'income' ? 'Income' : 'Expense'} · ${currency(item.amount)}`, date: item.expense_date || item.created_at, icon: CreditCard })),
+    ...data.files.map((item) => ({ title: item.original_name || item.filename || 'Shared file', detail: 'Added to shared library', date: item.file_date || item.created_at, icon: Image })),
+  ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 5)
 
   return <div className="overview-layout">
-    <section className="stats-grid" aria-label="Workspace statistics">{stats.map(({ label, value, icon: Icon, delta, color, target }) => <button className="stat-card" key={label} onClick={() => onNavigate(target)}><div className="stat-top"><span>{label}</span><span className={`stat-icon icon-${color}`}><Icon size={17} /></span></div><strong className="stat-value">{value == null ? '—' : value}</strong><span className="stat-foot">{delta || (errors.stats ? 'Stats unavailable' : 'No records yet')}<ArrowUpRight size={13} /></span></button>)}</section>
-    {(errors.stats || errors.projects || errors.tasks || errors.expenses) && <InlineError message="Some dashboard data could not be loaded. Check your API connection or sign in again." />}
+    <section className="stats-grid" aria-label="Workspace statistics">{stats.map(({ label, value, icon: Icon, delta, color, target }) => <button className="stat-card" key={label} onClick={() => onNavigate(target)}><div className="stat-top"><span>{label}</span><span className={`stat-icon icon-${color}`}><Icon size={17} /></span></div><strong className="stat-value">{value == null ? '—' : value}</strong><span className="stat-foot">{delta || 'No records yet'}<ArrowUpRight size={13} /></span></button>)}</section>
+    {Object.keys(errors).length > 0 && <InlineError message="Some overview details could not be loaded. Sections with unavailable data are marked; other workspace information is still shown." />}
+    <div className="overview-focus-grid">
+      <section className="focus-card">
+        <div className="focus-glow" aria-hidden="true" />
+        <div className="focus-card-heading"><span className="focus-icon"><Sparkles size={16} /></span><span className="eyebrow">YOUR NEXT STEPS</span><button className="text-action" onClick={() => onNavigate('workspace')}>All tasks<ArrowRight size={14} /></button></div>
+        <div className="focus-title-row"><div><h2>{overdueTasks.length ? 'A few things need attention.' : openTasks.length ? 'Keep your momentum going.' : 'You’re all caught up.'}</h2><p>{errors.tasks ? errors.tasks : overdueTasks.length ? `${overdueTasks.length} ${overdueTasks.length === 1 ? 'task is' : 'tasks are'} past due.` : openTasks.length ? `${openTasks.length} open ${openTasks.length === 1 ? 'task' : 'tasks'} across your workspace.` : 'Add a task whenever something comes up.'}</p></div><button className="focus-add" aria-label="Create a task" onClick={() => onCreate('tasks')}><Plus size={17} /></button></div>
+        {upcomingTasks.length ? <div className="focus-task-list">{upcomingTasks.map((task) => {
+          const isOverdue = task.due_date && String(task.due_date).slice(0, 10) < todayKey
+          return <button className="focus-task" key={task.id} onClick={() => onNavigate('workspace')}><span className={`focus-task-check ${isOverdue ? 'is-overdue' : ''}`}><Check size={12} /></span><strong>{task.title}</strong><span className={isOverdue ? 'focus-task-overdue' : ''}>{task.due_date ? (isOverdue ? 'Overdue' : friendlyDate(task.due_date)) : 'No due date'}</span></button>
+        })}</div> : <button className="focus-empty" onClick={() => onCreate('tasks')}><Plus size={14} /> Add your first task</button>}
+      </section>
+      <section className="progress-card">
+        <div className="progress-card-heading"><div><p className="eyebrow">WORKSPACE PULSE</p><h2>A little progress adds up.</h2></div><span className="pulse-icon"><Activity size={17} /></span></div>
+        <div className="task-progress-meta"><span>Task completion</span><strong>{errors.tasks ? '—' : `${taskProgress}%`}</strong></div>
+        <div className="task-progress-track"><span style={{ width: `${errors.tasks ? 0 : taskProgress}%` }} /></div>
+        <div className="pulse-breakdown"><div><CheckCircle2 size={15} /><strong>{errors.tasks ? '—' : completedTasks}</strong><span>completed</span></div><div><Clock3 size={15} /><strong>{errors.tasks ? '—' : openTasks.length}</strong><span>still open</span></div><div><FolderKanban size={15} /><strong>{errors.projects ? '—' : activeProjects.length}</strong><span>in motion</span></div></div>
+      </section>
+    </div>
+    <div className="overview-detail-grid">
+      <section className="panel overview-detail-card finance-glance">
+        <PanelHeading title="Money at a glance" kicker="FINANCE" action="Open finance" onAction={() => onNavigate('finance')} />
+        <div className="finance-glance-total"><span>Available balance</span><strong>{errors.financeAccounts ? 'Unavailable' : currency(availableBalance)}</strong><small>Across {data.financeAccounts.length} {data.financeAccounts.length === 1 ? 'account' : 'accounts'}</small></div>
+        <div className="finance-glance-row"><span>This month’s spending</span><strong>{errors.expenses ? 'Unavailable' : currency(monthlySpend)}</strong></div>
+        <div className="finance-glance-row"><span>Income recorded</span><strong className="income-value">{errors.expenses ? 'Unavailable' : currency(monthlyIncomeTotal)}</strong></div>
+        {data.budgets.length > 0 && <div className="budget-glance"><div className="budget-glance-label"><span>{trackedBudget?.category} · {trackedBudget?.period} budget</span><strong>{errors.budgets ? 'Unavailable' : `${Math.round(budgetProgress)}%`}</strong></div><div className="budget-glance-track"><span style={{ width: `${errors.budgets ? 0 : budgetProgress}%` }} /></div><small>{errors.budgets ? errors.budgets : `${currency(trackedBudget?.spent)} of ${currency(trackedBudget?.amount)} · most-used of ${data.budgets.length}`}</small></div>}
+        {data.goals.length > 0 && <div className="goal-glance"><Target size={15} /><span>{data.goals.length} savings {data.goals.length === 1 ? 'goal' : 'goals'}</span><strong>{currency(data.goals.reduce((total, goal) => total + (Number(goal.saved_amount) || 0), 0))} saved</strong></div>}
+        {!data.financeAccounts.length && !data.expenses.length && !data.budgets.length && !data.goals.length && <p className="detail-empty">{errors.financeAccounts || errors.expenses || errors.budgets || errors.goals || 'Add an account, transaction, budget, or goal to start your financial overview.'}</p>}
+      </section>
+      <section className="panel overview-detail-card workspace-glance">
+        <PanelHeading title="Your workspace" kicker="NOTES & PLANS" action="Open workspace" onAction={() => onNavigate('workspace')} />
+        <div className="resource-count-row"><span className="resource-icon"><StickyNote size={16} /></span><span><strong>{errors.notes ? '—' : data.notes.length} saved notes</strong><small>Ideas and details, all in one place</small></span><ArrowRight size={14} /></div>
+        {data.notes.length > 0 ? <div className="note-glance-list">{data.notes.slice(0, 2).map((note) => <div className="note-glance-item" key={note.id}><span>{note.title}</span><time>{friendlyDate(note.updated_at || note.created_at)}</time></div>)}</div> : <p className="detail-empty">{errors.notes || 'Your latest notes will show up here.'}</p>}
+        <button className="inline-create" onClick={() => onCreate('notes')}><Plus size={14} /> Write a note</button>
+      </section>
+      <section className="panel overview-detail-card shared-glance">
+        <PanelHeading title="Shared moments" kicker="FAMILY CLOUD" action="Open library" onAction={() => onNavigate('cloud')} />
+        <div className="shared-summary"><div className="shared-summary-icon"><Image size={19} /></div><div><strong>{errors.files ? '—' : data.files.length}</strong><span>photos, videos & files</span></div></div>
+        <div className="shared-members"><Users size={15} /><span>Connected family</span><strong>{errors.familyMembers ? '—' : data.familyMembers.length}</strong></div>
+        <p className="detail-empty">{errors.files || errors.familyMembers || (data.files.length ? 'Your shared library is up to date.' : 'Family photos and videos will appear here when shared.')}</p>
+      </section>
+    </div>
     <div className="overview-columns">
-      <section className="panel projects-panel"><PanelHeading title={profile.projects} kicker="YOUR WORK" action="View all" onAction={() => onNavigate('projects')} /><div className="recent-projects">{data.projects.length ? data.projects.slice(0, 4).map((project) => <div className="recent-project" key={project.id}><span className="project-glyph"><Blocks size={16} /></span><span className="recent-project-copy"><strong>{project.title}</strong><small>{project.description || 'No description provided'}</small></span><StatusBadge status={project.status} /><span className="row-date">{friendlyDate(project.updated_at || project.created_at)}</span></div>) : <EmptyState icon={FolderKanban} title={errors.projects ? 'Projects unavailable' : 'Nothing in progress yet'} detail={errors.projects ? errors.projects : 'Your projects will show up here once you create one.'} action={!errors.projects && { label: profile.projectAction, onClick: () => onCreate('projects') }} />}</div></section>
-      <section className="panel activity-panel"><PanelHeading title="Recent activity" kicker="LATEST UPDATES" /><div className="activity-list">{updates.length ? updates.map((update, index) => <div className="activity-item" key={`${update.title}-${index}`}><span className="activity-icon"><update.icon size={15} /></span><div><strong>{update.title}</strong><span>{update.detail}</span></div><time>{friendlyDate(update.date)}</time></div>) : <EmptyState icon={Activity} title={errors.projects || errors.tasks ? 'Activity unavailable' : 'Quiet for now'} detail="Recent project, task, and note updates will appear here." />}</div></section>
+      <section className="panel projects-panel"><PanelHeading title={profile.projects} kicker="PROJECT TRACKER" action="View all" onAction={() => onNavigate('projects')} /><div className="recent-projects">{data.projects.length ? data.projects.slice(0, 4).map((project) => <div className="recent-project" key={project.id}><span className="project-glyph"><Blocks size={16} /></span><span className="recent-project-copy"><strong>{project.title}</strong><small>{project.description || 'No description provided'}</small></span><StatusBadge status={project.status} /><span className="row-date">{friendlyDate(project.updated_at || project.created_at)}</span></div>) : <EmptyState icon={FolderKanban} title={errors.projects ? 'Projects unavailable' : 'Nothing in progress yet'} detail={errors.projects ? errors.projects : 'Your projects will show up here once you create one.'} action={!errors.projects && { label: profile.projectAction, onClick: () => onCreate('projects') }} />}</div></section>
+      <section className="panel activity-panel"><PanelHeading title="Recent activity" kicker="ACROSS YOUR WORKSPACE" /><div className="activity-list">{updates.length ? updates.map((update, index) => <div className="activity-item" key={`${update.title}-${index}`}><span className="activity-icon"><update.icon size={15} /></span><div><strong>{update.title}</strong><span>{update.detail}</span></div><time>{friendlyDate(update.date)}</time></div>) : <EmptyState icon={Activity} title="Quiet for now" detail="Recent project, task, note, finance, and library activity will appear here." />}</div></section>
     </div>
     <div className="overview-bottom">
       <section className="panel quick-panel"><PanelHeading title="Quick actions" kicker="GET MOVING" /><div className="quick-actions"><QuickAction icon={FolderKanban} label={profile.projectAction} hint="Start something new" onClick={() => onCreate('projects')} /><QuickAction icon={CreditCard} label="Add expense" hint="Record a purchase" onClick={() => onCreate('expenses')} /><QuickAction icon={ListTodo} label={profile.taskAction} hint={profile.taskHint} onClick={() => onCreate('tasks')} /><QuickAction icon={FileText} label="Write a note" hint="Save a thought" onClick={() => onCreate('notes')} /></div></section>
-      <section className="terminal-panel"><div className="terminal-head"><span><Terminal size={14} /> SYSTEM SNAPSHOT</span><span className="terminal-live"><i /> LIVE</span></div><div className="terminal-body"><p><span>01</span><b>api.status</b><em>{errors.stats ? 'partial' : 'operational'}</em></p><p><span>02</span><b>workspace.projects</b><em>{data.stats?.projects?.total ?? '—'} records</em></p><p><span>03</span><b>workspace.notes</b><em>{data.stats?.notes?.total ?? '—'} records</em></p><p className="terminal-prompt"><span>›</span> ready<span className="cursor-block" /></p></div></section>
+      <section className="terminal-panel"><div className="terminal-head"><span><Terminal size={14} /> WORKSPACE SNAPSHOT</span><span className="terminal-live"><i /> {Object.keys(errors).length ? 'PARTIAL' : 'IN SYNC'}</span></div><div className="terminal-body"><p><span>01</span><b>projects.active</b><em>{errors.projects ? 'unavailable' : `${activeProjects.length} records`}</em></p><p><span>02</span><b>workspace.notes</b><em>{errors.notes ? 'unavailable' : `${data.notes.length} records`}</em></p><p><span>03</span><b>finance.accounts</b><em>{errors.financeAccounts ? 'unavailable' : `${data.financeAccounts.length} records`}</em></p><p><span>04</span><b>cloud.shared_files</b><em>{errors.files ? 'unavailable' : `${data.files.length} records`}</em></p></div></section>
     </div>
   </div>
 }
