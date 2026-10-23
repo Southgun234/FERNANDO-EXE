@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   Activity, ArrowRight, ArrowUpRight, Bell, Blocks, Check, CheckCircle2, ChevronDown,
   CircleHelp, Clock3, Copy, CreditCard, FileText,
-  Folder, FolderKanban, Image, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu,
+  FileSpreadsheet, Folder, FolderKanban, Image, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, StickyNote, Target,
   Terminal, Upload, Users, Wallet, X,
 } from 'lucide-react'
@@ -504,7 +504,7 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
         {loadState === 'loading' ? <DashboardSkeleton /> : <>
           {section === 'overview' && <Overview data={data} errors={loadErrors} onNavigate={selectSection} onCreate={openCreate} occupation={occupation} />}
           {section === 'projects' && <ProjectsPage projects={data.projects} error={loadErrors.projects} onCreate={() => openCreate('projects')} onEdit={(item) => openEdit('projects', item)} onDelete={(item) => deleteResource('projects', item)} />}
-          {section === 'finance' && <FinancePage expenses={data.expenses} accounts={data.financeAccounts} categories={data.financeCategories} budgets={data.budgets} goals={data.goals} error={loadErrors.expenses} financeError={loadErrors.financeAccounts || loadErrors.financeCategories || loadErrors.budgets || loadErrors.goals} onCreate={openCreate} onEdit={(item) => openEdit('expenses', item)} onDelete={deleteResource} onContribute={contributeToGoal} />}
+          {section === 'finance' && <FinancePage expenses={data.expenses} accounts={data.financeAccounts} categories={data.financeCategories} budgets={data.budgets} goals={data.goals} error={loadErrors.expenses} financeError={loadErrors.financeAccounts || loadErrors.financeCategories || loadErrors.budgets || loadErrors.goals} onCreate={openCreate} onEdit={(item) => openEdit('expenses', item)} onDelete={deleteResource} onContribute={contributeToGoal} onNotify={notify} />}
           {section === 'workspace' && <WorkspacePage tasks={data.tasks} notes={data.notes} errors={loadErrors} onCreate={openCreate} onEdit={openEdit} onDelete={deleteResource} onRefresh={refresh} notify={notify} celebrate={celebrate} />}
           {section === 'cloud' && <FamilyCloudPage files={data.files} error={loadErrors.files} familyMembers={data.familyMembers} membersError={loadErrors.familyMembers} onRefresh={refresh} notify={notify} />}
         </>}
@@ -662,10 +662,11 @@ function PieLegend({ slices }) {
   return <div className="category-pie-legend">{slices.map((slice) => <div className="category-pie-item" key={slice.name}><span className="category-pie-label"><i style={{ backgroundColor: slice.color }} />{slice.name}</span><strong>{slice.percentage.toFixed(1)}%</strong><small>{currency(slice.total)}</small></div>)}</div>
 }
 
-function FinancePage({ expenses, accounts, categories: savedCategories, budgets, goals, error, financeError, onCreate, onEdit, onDelete, onContribute }) {
+function FinancePage({ expenses, accounts, categories: savedCategories, budgets, goals, error, financeError, onCreate, onEdit, onDelete, onContribute, onNotify }) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [dateRange, setDateRange] = useState('all')
+  const [exportError, setExportError] = useState('')
   const categories = [...new Set([...savedCategories.map((item) => item.name), ...expenses.map((item) => item.category)].filter(Boolean))].sort()
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -676,6 +677,94 @@ function FinancePage({ expenses, accounts, categories: savedCategories, budgets,
     const dateMatches = dateRange === 'all' || (transactionDate && transactionDate >= (dateRange === 'month' ? monthStart : thirtyDaysAgo) && transactionDate <= now)
     return dateMatches && (category === 'all' || expense.category === category) && `${expense.title} ${expense.category} ${expense.account_name || ''}`.toLowerCase().includes(query.toLowerCase())
   })
+  async function exportTransactions() {
+    setExportError('')
+    try {
+      const { default: ExcelJS } = await import('exceljs')
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'Rere Cloud'
+      workbook.created = new Date()
+
+      const transactionsSheet = workbook.addWorksheet('Transactions', { views: [{ state: 'frozen', ySplit: 1 }] })
+      transactionsSheet.columns = [
+        { header: 'Date', key: 'date', width: 16 },
+        { header: 'Description', key: 'description', width: 32 },
+        { header: 'Type', key: 'type', width: 14 },
+        { header: 'Category', key: 'category', width: 22 },
+        { header: 'Account', key: 'account', width: 22 },
+        { header: 'Amount (KES)', key: 'amount', width: 18, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+      ]
+      transactionsSheet.addRows(filtered.map((expense) => ({
+        date: expenseDateKey(expense.expense_date) || '',
+        description: expense.title || '',
+        type: expense.transaction_type || 'expense',
+        category: expense.category || 'Uncategorized',
+        account: expense.account_name || 'Unassigned',
+        amount: Number(expense.amount) || 0,
+      })))
+      transactionsSheet.autoFilter = { from: 'A1', to: `F${filtered.length + 1}` }
+
+      const headerStyle = { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF242730' } } }
+      transactionsSheet.getRow(1).eachCell((cell) => { cell.style = headerStyle })
+
+      const income = filtered.filter((expense) => expense.transaction_type === 'income').reduce((sum, expense) => sum + amountInCents(expense.amount), 0) / 100
+      const spending = filtered.filter((expense) => expense.transaction_type !== 'income').reduce((sum, expense) => sum + amountInCents(expense.amount), 0) / 100
+      const summarySheet = workbook.addWorksheet('Summary')
+      summarySheet.columns = [{ header: 'Summary', key: 'label', width: 28 }, { header: 'Value', key: 'value', width: 28 }]
+      summarySheet.addRows([
+        { label: 'Report generated', value: new Date().toLocaleString('en-KE') },
+        { label: 'Date filter', value: dateRange === 'month' ? 'This month' : dateRange === '30days' ? 'Last 30 days' : 'All dates' },
+        { label: 'Category filter', value: category === 'all' ? 'All categories' : category },
+        { label: 'Search', value: query || 'None' },
+        { label: 'Transactions exported', value: filtered.length },
+        { label: 'Total income (KES)', value: income },
+        { label: 'Total expenses (KES)', value: spending },
+        { label: 'Net cash flow (KES)', value: income - spending },
+      ])
+      summarySheet.getRow(1).eachCell((cell) => { cell.style = headerStyle })
+      for (const row of [6, 7, 8]) summarySheet.getCell(`B${row}`).numFmt = '#,##0.00;[Red]-#,##0.00'
+
+      const categoryTotals = new Map()
+      for (const expense of filtered) {
+        const name = expense.category || 'Uncategorized'
+        const totals = categoryTotals.get(name) || { expense: 0, income: 0, count: 0 }
+        totals[expense.transaction_type === 'income' ? 'income' : 'expense'] += amountInCents(expense.amount)
+        totals.count += 1
+        categoryTotals.set(name, totals)
+      }
+      const categorySheet = workbook.addWorksheet('By category', { views: [{ state: 'frozen', ySplit: 1 }] })
+      categorySheet.columns = [
+        { header: 'Category', key: 'category', width: 24 },
+        { header: 'Expenses (KES)', key: 'expense', width: 20, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+        { header: 'Income (KES)', key: 'income', width: 20, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+        { header: 'Net (KES)', key: 'net', width: 18, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+        { header: 'Transactions', key: 'count', width: 16 },
+      ]
+      categorySheet.addRows([...categoryTotals].sort(([first], [second]) => first.localeCompare(second)).map(([name, totals]) => ({
+        category: name,
+        expense: totals.expense / 100,
+        income: totals.income / 100,
+        net: (totals.income - totals.expense) / 100,
+        count: totals.count,
+      })))
+      categorySheet.autoFilter = { from: 'A1', to: `E${categoryTotals.size + 1}` }
+      categorySheet.getRow(1).eachCell((cell) => { cell.style = headerStyle })
+
+      const fileData = await workbook.xlsx.writeBuffer()
+      const file = new Blob([fileData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(file)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `rere-cloud-transactions-${new Date().toISOString().slice(0, 10)}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      onNotify(`Downloaded ${filtered.length} transactions to Excel.`)
+    } catch (error) {
+      setExportError(`Could not create the Excel file. ${error.message}`)
+    }
+  }
   const spendingCents = expenses.filter((item) => item.transaction_type !== 'income').reduce((sum, item) => sum + amountInCents(item.amount), 0)
   const incomeCents = expenses.filter((item) => item.transaction_type === 'income').reduce((sum, item) => sum + amountInCents(item.amount), 0)
   const spendingTotal = spendingCents / 100
@@ -741,8 +830,9 @@ function FinancePage({ expenses, accounts, categories: savedCategories, budgets,
       <section className="panel finance-plan-panel"><PanelHeading title="Budgets" kicker="SPENDING LIMITS" action="Add budget" onAction={() => onCreate('budgets')} />{budgets.length ? <div className="finance-plan-list">{budgets.map((budget) => { const spent = Number(budget.spent) || 0; const limit = Number(budget.amount) || 0; const percent = limit ? Math.min(100, spent / limit * 100) : 0; return <article className="budget-row" key={budget.id}><div className="budget-row-top"><div><strong>{budget.category}</strong><small>{budget.period} budget</small></div><button className="icon-button danger-hover" aria-label={`Delete ${budget.category} budget`} title="Delete budget" onClick={() => onDelete('budgets', { ...budget, title: budget.category })}><X size={15} /></button></div><div className="budget-progress"><span className={percent >= 100 ? 'budget-over' : ''} style={{ width: `${percent}%` }} /></div><div className="budget-numbers"><span>{currency(spent)} spent</span><strong>{currency(limit)}</strong></div></article> })}</div> : <EmptyState icon={Activity} title="No budgets yet" detail="Set a category limit to track spending against your plan." action={{ label: 'Create budget', onClick: () => onCreate('budgets') }} />}</section>
       <section className="panel finance-plan-panel"><PanelHeading title="Financial goals" kicker="SAVING JOURNEY" action="Add goal" onAction={() => onCreate('goals')} />{goals.length ? <div className="finance-plan-list">{goals.map((goal) => <GoalProgress key={goal.id} goal={goal} accounts={accounts} onDelete={() => onDelete('goals', { ...goal, title: goal.title })} onContribute={onContribute} />)}</div> : <EmptyState icon={Wallet} title="No goals yet" detail="Create a goal, allocate money, and earn XP as your savings grow." action={{ label: 'Create goal', onClick: () => onCreate('goals') }} />}</section>
     </div>
-    <section className="panel finance-panel"><div className="panel-heading finance-list-heading"><div><p className="eyebrow">TRANSACTION LOG</p><h2>Income and expenses</h2></div><div className="finance-filters"><label className="search-box compact-search"><Search size={15} /><input aria-label="Search transactions" placeholder="Search..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by date</span><select value={dateRange} onChange={(event) => setDateRange(event.target.value)}><option value="all">All dates</option><option value="month">This month</option><option value="30days">Last 30 days</option></select><ChevronDown size={14} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option>{categories.map((name) => <option key={name}>{name}</option>)}</select><ChevronDown size={14} /></label></div></div>
+    <section className="panel finance-panel"><div className="panel-heading finance-list-heading"><div><p className="eyebrow">TRANSACTION LOG</p><h2>Income and expenses</h2></div><div className="finance-filters"><label className="search-box compact-search"><Search size={15} /><input aria-label="Search transactions" placeholder="Search..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by date</span><select value={dateRange} onChange={(event) => setDateRange(event.target.value)}><option value="all">All dates</option><option value="month">This month</option><option value="30days">Last 30 days</option></select><ChevronDown size={14} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option>{categories.map((name) => <option key={name}>{name}</option>)}</select><ChevronDown size={14} /></label><button className="button button-secondary export-button" onClick={exportTransactions} disabled={Boolean(error) || !filtered.length} title={error ? 'Transactions are unavailable' : filtered.length ? 'Download the filtered transaction history as an Excel workbook' : 'No transactions match the current filters'}><FileSpreadsheet size={15} />Download Excel</button></div></div>
       {error && <InlineError message={error} />}
+      {exportError && <InlineError message={exportError} />}
       {filtered.length ? <div className="expense-table-wrap"><table className="expense-table"><thead><tr><th>DESCRIPTION</th><th>TYPE</th><th>CATEGORY</th><th>ACCOUNT</th><th>DATE</th><th>AMOUNT</th><th aria-label="Actions" /></tr></thead><tbody>{filtered.map((expense) => <tr key={expense.id}><td><span className="expense-title"><span className="expense-mark"><CreditCard size={15} /></span>{expense.title}</span></td><td><span className={`transaction-type transaction-${expense.transaction_type || 'expense'}`}>{expense.transaction_type || 'expense'}</span></td><td><span className="category-tag">{expense.category}</span></td><td>{expense.account_name || 'Unassigned'}</td><td>{friendlyDate(expense.expense_date)}</td><td className={`amount-cell ${expense.transaction_type === 'income' ? 'amount-income' : ''}`}>{expense.transaction_type === 'income' ? '+' : '-'}{currency(expense.amount)}</td><td><div className="row-actions"><button className="icon-button" title="Edit transaction" aria-label={`Edit ${expense.title}`} onClick={() => onEdit(expense)}><Settings2 size={15} /></button><button className="icon-button danger-hover" title="Delete transaction" aria-label={`Delete ${expense.title}`} onClick={() => onDelete('expenses', expense)}><X size={15} /></button></div></td></tr>)}</tbody></table></div> : <EmptyState icon={CreditCard} title={error ? 'Transactions could not be loaded' : query || category !== 'all' || dateRange !== 'all' ? 'No matching transactions' : 'No transactions recorded'} detail={error || (query || category !== 'all' || dateRange !== 'all' ? 'Try another search, category, or date range.' : 'Add income or expenses to start tracking your accounts.')} action={!error && !query && category === 'all' && dateRange === 'all' ? { label: 'Add transaction', onClick: () => onCreate('expenses') } : undefined} />}
     </section>
   </div>
