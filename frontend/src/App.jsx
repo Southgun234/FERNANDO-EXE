@@ -343,6 +343,14 @@ function AuthScreen({ health, healthError, initialError, onSignedIn }) {
       </form>
       <p className="auth-switch">{mode === 'signin' ? 'Part of Fernando’s network?' : 'Already have a profile?'} <button type="button" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); setNotice('') }}>{mode === 'signin' ? 'Create profile' : 'Sign in'}</button></p>
     </section>
+    <aside className="auth-art" aria-hidden="true">
+      <div className="auth-art-orbit auth-art-orbit-one" />
+      <div className="auth-art-orbit auth-art-orbit-two" />
+      <div className="auth-art-core"><img src="/rere-cloud-logo.svg" alt="" /></div>
+      <div className="auth-art-card auth-art-card-top"><span className="auth-art-icon"><ShieldCheck size={16} /></span><span><strong>YOUR PRIVATE NETWORK</strong><small>Space to make it yours.</small></span><i /></div>
+      <div className="auth-art-card auth-art-card-bottom"><span className="auth-art-icon"><Activity size={16} /></span><span><strong>ALL IN ONE PLACE</strong><small>Projects, plans &amp; people.</small></span><ArrowUpRight size={15} /></div>
+      <p className="auth-art-caption"><span /> PERSONAL BY DESIGN <i /> BUILT FOR FOCUS</p>
+    </aside>
     <footer className="auth-foot"><span><ShieldCheck size={14} /> SECURE SESSION</span><span>BUILD 01.26 <i /> ALL SYSTEMS {health === 'online' ? 'NOMINAL' : 'STANDBY'}</span></footer>
     {success && <SuccessOverlay title={success.title} message={success.message} onDone={() => setSuccess(null)} />}
   </main>
