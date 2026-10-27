@@ -1048,7 +1048,7 @@ function FamilyCloudPage({ files, error, familyMembers, membersError, onRefresh,
                 <h3>{monthKey === 'undated' ? 'Date unavailable' : new Intl.DateTimeFormat('en-KE', { month: 'long', year: 'numeric' }).format(new Date(`${monthKey}-01T12:00:00`))}</h3>
                 <span>{monthFiles.length} {monthFiles.length === 1 ? 'photo' : 'photos'}</span>
               </div>
-              <div className="family-gallery-grid">
+              <div className="family-gallery-grid family-photo-grid">
                 {monthFiles.map((file) => (
                   <article className="family-card" key={file.id}>
                     <FamilyPhotoPreview file={file} onPreview={() => setSelectedPhoto(file)} />
