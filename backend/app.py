@@ -339,6 +339,25 @@ def ensure_finance_tables():
     )
 
 
+def ensure_diary_table():
+    execute_db(
+        """
+        CREATE TABLE IF NOT EXISTS diary_entries (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id INT UNSIGNED NOT NULL,
+            title VARCHAR(200) NOT NULL,
+            content LONGTEXT NOT NULL,
+            entry_date DATE NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_diary_entries_user_date (user_id, entry_date),
+            CONSTRAINT fk_diary_entries_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        """
+    )
+
+
 def slugify(value):
     slug = re.sub(r"[^a-z0-9]+", "-", (value or "family").lower()).strip("-")
     return slug[:80] or "family"
@@ -474,6 +493,7 @@ def media_response(row):
 
 ensure_family_tables()
 ensure_finance_tables()
+ensure_diary_table()
 
 
 # ============================================================
@@ -1514,6 +1534,124 @@ def delete_note(note_id):
         return jsonify({"message": "Note deleted."}), 200
     except pymysql.MySQLError:
         return handle_database_error("delete note")
+
+
+# ============================================================
+# DIARY CRUD
+# ============================================================
+
+@app.route("/api/diary", methods=["GET"])
+@require_auth
+def get_diary_entries():
+    try:
+        rows = query_db(
+            """
+            SELECT id, title, content, entry_date, created_at, updated_at
+            FROM diary_entries WHERE user_id=%s
+            ORDER BY entry_date DESC, updated_at DESC, id DESC
+            """,
+            (g.user["id"],)
+        )
+        return jsonify({"diary": [
+            {**row, "entry_date": row["entry_date"].isoformat()}
+            for row in rows
+        ]}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("get diary entries")
+
+
+@app.route("/api/diary", methods=["POST"])
+@require_auth
+def create_diary_entry():
+    data = get_data()
+    title = clean_string(data.get("title"), 200)
+    content = data.get("content", "")
+    entry_date = parse_date(data.get("entry_date") or date.today().isoformat())
+
+    if not title:
+        return api_error("Diary entry title is required.")
+    if not isinstance(content, str):
+        return api_error("Diary entry content must be text.")
+    if len(content) > 20000:
+        return api_error("Diary entry content cannot exceed 20000 characters.")
+    if entry_date is False:
+        return api_error("Diary entry date must be a valid date.")
+
+    try:
+        result = execute_db(
+            "INSERT INTO diary_entries (user_id, title, content, entry_date) VALUES (%s, %s, %s, %s)",
+            (g.user["id"], title, content, entry_date)
+        )
+        return jsonify({
+            "message": "Diary entry created.",
+            "diary_entry_id": result["lastrowid"]
+        }), 201
+    except pymysql.MySQLError:
+        return handle_database_error("create diary entry")
+
+
+@app.route("/api/diary/<int:entry_id>", methods=["PATCH"])
+@require_auth
+def update_diary_entry(entry_id):
+    data = get_data()
+    updates = {}
+
+    if "title" in data:
+        title = clean_string(data["title"], 200)
+        if not title:
+            return api_error("Diary entry title cannot be empty.")
+        updates["title"] = title
+
+    if "content" in data:
+        if not isinstance(data["content"], str):
+            return api_error("Diary entry content must be text.")
+        if len(data["content"]) > 20000:
+            return api_error("Diary entry content cannot exceed 20000 characters.")
+        updates["content"] = data["content"]
+
+    if "entry_date" in data:
+        entry_date = parse_date(data["entry_date"])
+        if entry_date is False:
+            return api_error("Diary entry date must be a valid date.")
+        updates["entry_date"] = entry_date
+
+    if not updates:
+        return api_error("Provide a title, content, or date to update.")
+
+    columns = ", ".join(f"{key} = %s" for key in updates)
+    params = list(updates.values()) + [entry_id, g.user["id"]]
+
+    try:
+        result = execute_db(
+            f"UPDATE diary_entries SET {columns} WHERE id=%s AND user_id=%s",
+            params
+        )
+        if not result["rowcount"]:
+            exists = query_db(
+                "SELECT id FROM diary_entries WHERE id=%s AND user_id=%s",
+                (entry_id, g.user["id"]),
+                fetchone=True
+            )
+            if not exists:
+                return api_error("Diary entry not found.", 404)
+        return jsonify({"message": "Diary entry updated."}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("update diary entry")
+
+
+@app.route("/api/diary/<int:entry_id>", methods=["DELETE"])
+@require_auth
+def delete_diary_entry(entry_id):
+    try:
+        result = execute_db(
+            "DELETE FROM diary_entries WHERE id=%s AND user_id=%s",
+            (entry_id, g.user["id"])
+        )
+        if not result["rowcount"]:
+            return api_error("Diary entry not found.", 404)
+        return jsonify({"message": "Diary entry deleted."}), 200
+    except pymysql.MySQLError:
+        return handle_database_error("delete diary entry")
 
 
 # ============================================================

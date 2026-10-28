@@ -140,6 +140,12 @@ export const api = {
   },
   tasks: resource('tasks'),
   notes: resource('notes'),
+  diary: {
+    list: () => request('/api/diary'),
+    create: (body) => request('/api/diary', json('POST', body)),
+    update: (id, body) => request(`/api/diary/${id}`, json('PATCH', body)),
+    remove: (id) => request(`/api/diary/${id}`, { method: 'DELETE' }),
+  },
   family: {
     members: () => request('/api/family/members'),
     createInvite: () => request('/api/family/invites', json('POST', {})),

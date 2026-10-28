@@ -102,6 +102,22 @@ INSERT INTO `notes` (`id`, `user_id`, `title`, `content`, `created_at`, `updated
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `diary_entries`
+--
+
+CREATE TABLE `diary_entries` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `user_id` int(10) UNSIGNED NOT NULL,
+  `title` varchar(200) NOT NULL,
+  `content` longtext NOT NULL,
+  `entry_date` date NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `projects`
 --
 
@@ -232,6 +248,13 @@ ALTER TABLE `notes`
   ADD KEY `idx_notes_user` (`user_id`);
 
 --
+-- Indexes for table `diary_entries`
+--
+ALTER TABLE `diary_entries`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_diary_entries_user_date` (`user_id`, `entry_date`);
+
+--
 -- Indexes for table `projects`
 --
 ALTER TABLE `projects`
@@ -272,6 +295,12 @@ ALTER TABLE `notes`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
+-- AUTO_INCREMENT for table `diary_entries`
+--
+ALTER TABLE `diary_entries`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `projects`
 --
 ALTER TABLE `projects`
@@ -304,6 +333,12 @@ ALTER TABLE `expenses`
 --
 ALTER TABLE `notes`
   ADD CONSTRAINT `fk_notes_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `diary_entries`
+--
+ALTER TABLE `diary_entries`
+  ADD CONSTRAINT `fk_diary_entries_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `projects`

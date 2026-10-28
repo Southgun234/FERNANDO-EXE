@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Activity, ArrowRight, ArrowUpRight, Bell, Blocks, Check, CheckCircle2, ChevronDown,
+  Activity, ArrowRight, ArrowUpRight, Bell, Blocks, BookOpen, Check, CheckCircle2, ChevronDown,
   CircleHelp, Clock3, Copy, CreditCard, FileText,
   FileSpreadsheet, Folder, FolderKanban, Image, LayoutDashboard, ListTodo, LoaderCircle, LogOut, Menu,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, StickyNote, Target,
@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { id: 'cloud', label: 'Photos & Videos', group: 'PERSONAL', icon: Folder },
 ]
 
-const EMPTY_DATA = { projects: [], expenses: [], tasks: [], notes: [], files: [], familyMembers: [], financeAccounts: [], financeCategories: [], budgets: [], goals: [], stats: null }
+const EMPTY_DATA = { projects: [], expenses: [], tasks: [], notes: [], diary: [], files: [], familyMembers: [], financeAccounts: [], financeCategories: [], budgets: [], goals: [], stats: null }
 const STATUSES = ['active', 'completed', 'on_hold', 'archived']
 const OCCUPATIONS = [
   { value: 'student', label: 'Student' },
@@ -395,7 +395,7 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
       ['stats', api.stats()], ['projects', api.projects.list()], ['expenses', api.expenses.list()],
       ['financeAccounts', api.finance.accounts.list()], ['financeCategories', api.finance.categories.list()],
       ['budgets', api.finance.budgets.list()], ['goals', api.finance.goals.list()],
-      ['tasks', api.tasks.list()], ['notes', api.notes.list()], ['files', api.files.list()],
+      ['tasks', api.tasks.list()], ['notes', api.notes.list()], ['diary', api.diary.list()], ['files', api.files.list()],
       ['familyMembers', api.family.members()],
     ]
     Promise.all(entries.map(async ([key, promise]) => {
@@ -444,7 +444,7 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
       setSaving(null)
       setDialog(null)
       refresh()
-      celebrate(`${resourceLabel(resource)} ${item ? 'updated' : 'created'}`, 'Saved to your private workspace.', resource === 'notes' || resource === 'tasks' ? 'workspace' : resource)
+      celebrate(`${resourceLabel(resource)} ${item ? 'updated' : 'created'}`, 'Saved to your private workspace.', ['notes', 'tasks', 'diary'].includes(resource) ? 'workspace' : resource)
     } catch (error) {
       setSaving(null)
       throw error
@@ -458,7 +458,7 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
       const service = api[resource] || api.finance[resource]
       await service.remove(item.id)
       refresh()
-      celebrate(`${resourceLabel(resource)} deleted`, 'Your workspace is up to date.', resource === 'notes' || resource === 'tasks' ? 'workspace' : resource)
+      celebrate(`${resourceLabel(resource)} deleted`, 'Your workspace is up to date.', ['notes', 'tasks', 'diary'].includes(resource) ? 'workspace' : resource)
     } catch (error) { notify(error.message) }
   }
 
@@ -496,7 +496,7 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
         </div>)}
       </nav>
       <div className="sidebar-bottom">
-        <div className="storage-panel"><div className="storage-icon"><Terminal size={16} /></div><div><strong>Workspace</strong><span>{data.stats ? `${data.stats.projects?.total ?? 0} projects · ${data.stats.notes?.total ?? 0} notes` : 'Personal environment'}</span></div><MoreHorizontal size={17} /></div>
+        <div className="storage-panel"><div className="storage-icon"><Terminal size={16} /></div><div><strong>Workspace</strong><span>{data.stats ? `${data.stats.projects?.total ?? 0} projects · ${data.stats.notes?.total ?? 0} notes · ${data.diary.length} diary entries` : 'Personal environment'}</span></div><MoreHorizontal size={17} /></div>
         <div className="profile-row"><div className="avatar">{initials(user)}</div><div className="profile-copy"><strong>{user.first_name} {user.last_name}</strong><span>@{user.username}</span></div><button className="icon-button logout-button" title="Sign out" aria-label="Sign out" onClick={onSignOut}><LogOut size={16} /></button></div>
       </div>
     </aside>
@@ -512,8 +512,8 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
         {loadState === 'loading' ? <DashboardSkeleton /> : <>
           {section === 'overview' && <Overview data={data} errors={loadErrors} onNavigate={selectSection} onCreate={openCreate} occupation={occupation} />}
           {section === 'projects' && <ProjectsPage projects={data.projects} error={loadErrors.projects} onCreate={() => openCreate('projects')} onEdit={(item) => openEdit('projects', item)} onDelete={(item) => deleteResource('projects', item)} />}
-          {section === 'finance' && <FinancePage expenses={data.expenses} accounts={data.financeAccounts} categories={data.financeCategories} budgets={data.budgets} goals={data.goals} error={loadErrors.expenses} financeError={loadErrors.financeAccounts || loadErrors.financeCategories || loadErrors.budgets || loadErrors.goals} onCreate={openCreate} onEdit={(item) => openEdit('expenses', item)} onDelete={deleteResource} onContribute={contributeToGoal} onNotify={notify} />}
-          {section === 'workspace' && <WorkspacePage tasks={data.tasks} notes={data.notes} errors={loadErrors} onCreate={openCreate} onEdit={openEdit} onDelete={deleteResource} onRefresh={refresh} notify={notify} celebrate={celebrate} />}
+          {section === 'finance' && <FinancePage expenses={data.expenses} accounts={data.financeAccounts} categories={data.financeCategories} budgets={data.budgets} goals={data.goals} cloudData={data} loadErrors={loadErrors} error={loadErrors.expenses} financeError={loadErrors.financeAccounts || loadErrors.financeCategories || loadErrors.budgets || loadErrors.goals} onCreate={openCreate} onEdit={(item) => openEdit('expenses', item)} onDelete={deleteResource} onContribute={contributeToGoal} onNotify={notify} />}
+          {section === 'workspace' && <WorkspacePage tasks={data.tasks} notes={data.notes} diary={data.diary} errors={loadErrors} onCreate={openCreate} onEdit={openEdit} onDelete={deleteResource} onRefresh={refresh} notify={notify} celebrate={celebrate} />}
           {section === 'cloud' && <FamilyCloudPage files={data.files} error={loadErrors.files} familyMembers={data.familyMembers} membersError={loadErrors.familyMembers} onRefresh={refresh} notify={notify} />}
         </>}
       </div>
@@ -527,14 +527,14 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
 }
 
 function resourceLabel(resource) {
-  return { projects: 'Project', expenses: 'Transaction', tasks: 'Task', notes: 'Note', accounts: 'Account', categories: 'Category', budgets: 'Budget', goals: 'Financial goal' }[resource] || 'Item'
+  return { projects: 'Project', expenses: 'Transaction', tasks: 'Task', notes: 'Note', diary: 'Diary entry', accounts: 'Account', categories: 'Category', budgets: 'Budget', goals: 'Financial goal' }[resource] || 'Item'
 }
 
 function pageDescription(section) {
   return {
     projects: 'Track the work you are building, one project at a time.',
     finance: 'A clear view of personal expenses recorded in your workspace.',
-    workspace: 'Tasks and notes, kept close to the work.',
+    workspace: 'Tasks, notes, and private diary entries in one workspace.',
     cloud: 'Family memories, shared media, and the private archive for your trusted circle.',
   }[section]
 }
@@ -579,6 +579,7 @@ function Overview({ data, errors, onNavigate, onCreate, occupation = 'other' }) 
     ...data.projects.map((item) => ({ title: item.title, detail: `Project · ${item.status?.replace('_', ' ') || 'updated'}`, date: item.updated_at || item.created_at, icon: FolderKanban })),
     ...data.tasks.map((item) => ({ title: item.title, detail: `Task · ${item.status?.replace('_', ' ') || 'updated'}`, date: item.updated_at || item.created_at, icon: ListTodo })),
     ...data.notes.map((item) => ({ title: item.title, detail: 'Note · saved to workspace', date: item.updated_at || item.created_at, icon: StickyNote })),
+    ...data.diary.map((item) => ({ title: item.title, detail: 'Diary · private entry', date: item.entry_date || item.updated_at, icon: BookOpen })),
     ...data.expenses.map((item) => ({ title: item.title, detail: `${item.transaction_type === 'income' ? 'Income' : 'Expense'} · ${currency(item.amount)}`, date: item.expense_date || item.created_at, icon: CreditCard })),
     ...data.files.map((item) => ({ title: item.original_name || item.filename || 'Shared file', detail: 'Added to shared library', date: item.file_date || item.created_at, icon: Image })),
   ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 5)
@@ -670,7 +671,7 @@ function PieLegend({ slices }) {
   return <div className="category-pie-legend">{slices.map((slice) => <div className="category-pie-item" key={slice.name}><span className="category-pie-label"><i style={{ backgroundColor: slice.color }} />{slice.name}</span><strong>{slice.percentage.toFixed(1)}%</strong><small>{currency(slice.total)}</small></div>)}</div>
 }
 
-function FinancePage({ expenses, accounts, categories: savedCategories, budgets, goals, error, financeError, onCreate, onEdit, onDelete, onContribute, onNotify }) {
+function FinancePage({ expenses, accounts, categories: savedCategories, budgets, goals, cloudData, loadErrors, error, financeError, onCreate, onEdit, onDelete, onContribute, onNotify }) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [dateRange, setDateRange] = useState('all')
@@ -714,24 +715,28 @@ function FinancePage({ expenses, accounts, categories: savedCategories, budgets,
 
       const headerStyle = { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF242730' } } }
       transactionsSheet.getRow(1).eachCell((cell) => { cell.style = headerStyle })
+      const allTransactionsSheet = workbook.addWorksheet('All transactions', { views: [{ state: 'frozen', ySplit: 1 }] })
+      allTransactionsSheet.columns = [
+        { header: 'Date', key: 'date', width: 16 },
+        { header: 'Description', key: 'description', width: 32 },
+        { header: 'Type', key: 'type', width: 14 },
+        { header: 'Category', key: 'category', width: 22 },
+        { header: 'Account', key: 'account', width: 22 },
+        { header: 'Amount (KES)', key: 'amount', width: 18, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+      ]
+      allTransactionsSheet.addRows(cloudData.expenses.map((expense) => ({
+        date: expenseDateKey(expense.expense_date) || '',
+        description: expense.title || '',
+        type: expense.transaction_type || 'expense',
+        category: expense.category || 'Uncategorized',
+        account: expense.account_name || 'Unassigned',
+        amount: Number(expense.amount) || 0,
+      })))
+      allTransactionsSheet.autoFilter = { from: 'A1', to: `F${cloudData.expenses.length + 1}` }
+      allTransactionsSheet.getRow(1).eachCell((cell) => { cell.style = headerStyle })
 
       const income = filtered.filter((expense) => expense.transaction_type === 'income').reduce((sum, expense) => sum + amountInCents(expense.amount), 0) / 100
       const spending = filtered.filter((expense) => expense.transaction_type !== 'income').reduce((sum, expense) => sum + amountInCents(expense.amount), 0) / 100
-      const summarySheet = workbook.addWorksheet('Summary')
-      summarySheet.columns = [{ header: 'Summary', key: 'label', width: 28 }, { header: 'Value', key: 'value', width: 28 }]
-      summarySheet.addRows([
-        { label: 'Report generated', value: new Date().toLocaleString('en-KE') },
-        { label: 'Date filter', value: dateRange === 'month' ? 'This month' : dateRange === '30days' ? 'Last 30 days' : 'All dates' },
-        { label: 'Category filter', value: category === 'all' ? 'All categories' : category },
-        { label: 'Search', value: query || 'None' },
-        { label: 'Transactions exported', value: filtered.length },
-        { label: 'Total income (KES)', value: income },
-        { label: 'Total expenses (KES)', value: spending },
-        { label: 'Net cash flow (KES)', value: income - spending },
-      ])
-      summarySheet.getRow(1).eachCell((cell) => { cell.style = headerStyle })
-      for (const row of [6, 7, 8]) summarySheet.getCell(`B${row}`).numFmt = '#,##0.00;[Red]-#,##0.00'
-
       const categoryTotals = new Map()
       for (const expense of filtered) {
         const name = expense.category || 'Uncategorized'
@@ -758,17 +763,118 @@ function FinancePage({ expenses, accounts, categories: savedCategories, budgets,
       categorySheet.autoFilter = { from: 'A1', to: `E${categoryTotals.size + 1}` }
       categorySheet.getRow(1).eachCell((cell) => { cell.style = headerStyle })
 
+      const addCloudSheet = (name, columns, rows) => {
+        const sheet = workbook.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] })
+        sheet.columns = columns
+        sheet.addRows(rows)
+        const finalColumn = String.fromCharCode(64 + columns.length)
+        sheet.autoFilter = { from: 'A1', to: `${finalColumn}${Math.max(rows.length + 1, 1)}` }
+        sheet.getRow(1).eachCell((cell) => { cell.style = headerStyle })
+        return sheet
+      }
+      const dateValue = (value) => value ? String(value).slice(0, 10) : ''
+      addCloudSheet('Projects', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'Title', key: 'title', width: 30 },
+        { header: 'Description', key: 'description', width: 48 }, { header: 'Status', key: 'status', width: 16 },
+        { header: 'Created', key: 'created_at', width: 16 }, { header: 'Updated', key: 'updated_at', width: 16 },
+      ], cloudData.projects.map((item) => ({ ...item, created_at: dateValue(item.created_at), updated_at: dateValue(item.updated_at) })))
+      addCloudSheet('Tasks', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'Title', key: 'title', width: 30 },
+        { header: 'Description', key: 'description', width: 48 }, { header: 'Status', key: 'status', width: 16 },
+        { header: 'Due date', key: 'due_date', width: 16 }, { header: 'Updated', key: 'updated_at', width: 16 },
+      ], cloudData.tasks.map((item) => ({ ...item, due_date: dateValue(item.due_date), updated_at: dateValue(item.updated_at) })))
+      addCloudSheet('Notes', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'Title', key: 'title', width: 30 },
+        { header: 'Content', key: 'content', width: 70 }, { header: 'Created', key: 'created_at', width: 16 },
+        { header: 'Updated', key: 'updated_at', width: 16 },
+      ], cloudData.notes.map((item) => ({ ...item, created_at: dateValue(item.created_at), updated_at: dateValue(item.updated_at) })))
+      addCloudSheet('Diary', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'Entry date', key: 'entry_date', width: 16 },
+        { header: 'Title', key: 'title', width: 30 }, { header: 'Content', key: 'content', width: 70 },
+        { header: 'Created', key: 'created_at', width: 16 }, { header: 'Updated', key: 'updated_at', width: 16 },
+      ], cloudData.diary.map((item) => ({ ...item, entry_date: dateValue(item.entry_date), created_at: dateValue(item.created_at), updated_at: dateValue(item.updated_at) })))
+      addCloudSheet('Family files', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'File name', key: 'original_name', width: 40 },
+        { header: 'Type', key: 'category', width: 16 }, { header: 'Uploaded by', key: 'uploader_name', width: 24 },
+        { header: 'File date', key: 'file_date', width: 16 }, { header: 'Size (bytes)', key: 'size_bytes', width: 18 },
+      ], cloudData.files.map((item) => ({ ...item, file_date: dateValue(item.file_date) })))
+      addCloudSheet('Family members', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'First name', key: 'first_name', width: 20 },
+        { header: 'Last name', key: 'last_name', width: 20 }, { header: 'Username', key: 'username', width: 24 },
+        { header: 'Role', key: 'role', width: 16 }, { header: 'Joined', key: 'joined_at', width: 16 },
+      ], cloudData.familyMembers.map((item) => ({ ...item, joined_at: dateValue(item.joined_at) })))
+      addCloudSheet('Accounts', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'Name', key: 'name', width: 30 },
+        { header: 'Balance (KES)', key: 'balance', width: 20, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+        { header: 'Created', key: 'created_at', width: 16 },
+      ], cloudData.financeAccounts.map((item) => ({ ...item, created_at: dateValue(item.created_at) })))
+      addCloudSheet('Categories', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'Category', key: 'name', width: 30 },
+        { header: 'Created', key: 'created_at', width: 16 },
+      ], cloudData.financeCategories.map((item) => ({ ...item, created_at: dateValue(item.created_at) })))
+      addCloudSheet('Budgets', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'Category', key: 'category', width: 24 },
+        { header: 'Amount (KES)', key: 'amount', width: 20, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+        { header: 'Period', key: 'period', width: 16 }, { header: 'Spent (KES)', key: 'spent', width: 20, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+      ], cloudData.budgets.map((item) => ({ ...item })))
+      addCloudSheet('Goals', [
+        { header: 'ID', key: 'id', width: 12 }, { header: 'Goal', key: 'title', width: 30 },
+        { header: 'Target (KES)', key: 'target_amount', width: 20, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+        { header: 'Saved (KES)', key: 'saved_amount', width: 20, style: { numFmt: '#,##0.00;[Red]-#,##0.00' } },
+        { header: 'Target date', key: 'target_date', width: 16 }, { header: 'XP', key: 'xp', width: 12 },
+      ], cloudData.goals.map((item) => ({ ...item, target_date: dateValue(item.target_date) })))
+
+      const allIncome = cloudData.expenses.filter((item) => item.transaction_type === 'income').reduce((sum, item) => sum + amountInCents(item.amount), 0) / 100
+      const allSpending = cloudData.expenses.filter((item) => item.transaction_type !== 'income').reduce((sum, item) => sum + amountInCents(item.amount), 0) / 100
+      const cloudSections = [
+        ['Projects', cloudData.projects, 'projects'], ['Transactions', cloudData.expenses, 'expenses'],
+        ['Tasks', cloudData.tasks, 'tasks'], ['Notes', cloudData.notes, 'notes'], ['Diary entries', cloudData.diary, 'diary'],
+        ['Family files', cloudData.files, 'files'], ['Family members', cloudData.familyMembers, 'familyMembers'],
+        ['Finance accounts', cloudData.financeAccounts, 'financeAccounts'], ['Finance categories', cloudData.financeCategories, 'financeCategories'],
+        ['Budgets', cloudData.budgets, 'budgets'], ['Financial goals', cloudData.goals, 'goals'],
+      ]
+      const summarySheet = workbook.addWorksheet('Summary')
+      summarySheet.columns = [{ header: 'Section', key: 'section', width: 25 }, { header: 'Metric', key: 'metric', width: 36 }, { header: 'Value', key: 'value', width: 42 }]
+      summarySheet.addRows([
+        { section: 'Report', metric: 'Generated', value: new Date().toLocaleString('en-KE') },
+        { section: 'Report', metric: 'Included data', value: 'All loaded cloud records; Transactions and By category use the selected filters.' },
+        { section: 'Report', metric: 'Date filter', value: dateRange === 'month' ? 'This month' : dateRange === '30days' ? 'Last 30 days' : 'All dates' },
+        { section: 'Report', metric: 'Category filter', value: category === 'all' ? 'All categories' : category },
+        { section: 'Report', metric: 'Search', value: query || 'None' },
+        { section: 'Transactions sheet', metric: 'Filtered transactions exported', value: filtered.length },
+        { section: 'All transactions sheet', metric: 'All transactions exported', value: cloudData.expenses.length },
+        { section: 'Filtered finance totals', metric: 'Filtered income (KES)', value: income },
+        { section: 'Filtered finance totals', metric: 'Filtered expenses (KES)', value: spending },
+        { section: 'Filtered finance totals', metric: 'Filtered net cash flow (KES)', value: income - spending },
+        { section: 'Finance totals', metric: 'All cloud income (KES)', value: allIncome },
+        { section: 'Finance totals', metric: 'All cloud expenses (KES)', value: allSpending },
+        { section: 'Finance totals', metric: 'All cloud net cash flow (KES)', value: allIncome - allSpending },
+        ...cloudSections.map(([section, records, key]) => ({
+          section,
+          metric: 'Records',
+          value: `${records.length}${loadErrors[key] ? ` · Load error: ${loadErrors[key]}` : ''}`,
+        })),
+      ])
+      summarySheet.autoFilter = { from: 'A1', to: `C${summarySheet.rowCount}` }
+      summarySheet.getRow(1).eachCell((cell) => { cell.style = headerStyle })
+      summarySheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1 && row.getCell(2).value?.toString().includes('(KES)')) {
+          row.getCell(3).numFmt = '#,##0.00;[Red]-#,##0.00'
+        }
+      })
+
       const fileData = await workbook.xlsx.writeBuffer()
       const file = new Blob([fileData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       const url = URL.createObjectURL(file)
       const link = document.createElement('a')
       link.href = url
-      link.download = `rere-cloud-transactions-${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.download = `rere-cloud-summary-${new Date().toISOString().slice(0, 10)}.xlsx`
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      onNotify(`Downloaded ${filtered.length} transactions to Excel.`)
+      const totalRecords = cloudSections.reduce((sum, [, records]) => sum + records.length, 0)
+      onNotify(`Downloaded a cloud summary with ${totalRecords} records across ${cloudSections.length} sections.`)
     } catch (error) {
       setExportError(`Could not create the Excel file. ${error.message}`)
     }
@@ -838,7 +944,7 @@ function FinancePage({ expenses, accounts, categories: savedCategories, budgets,
       <section className="panel finance-plan-panel"><PanelHeading title="Budgets" kicker="SPENDING LIMITS" action="Add budget" onAction={() => onCreate('budgets')} />{budgets.length ? <div className="finance-plan-list">{budgets.map((budget) => { const spent = Number(budget.spent) || 0; const limit = Number(budget.amount) || 0; const percent = limit ? Math.min(100, spent / limit * 100) : 0; return <article className="budget-row" key={budget.id}><div className="budget-row-top"><div><strong>{budget.category}</strong><small>{budget.period} budget</small></div><button className="icon-button danger-hover" aria-label={`Delete ${budget.category} budget`} title="Delete budget" onClick={() => onDelete('budgets', { ...budget, title: budget.category })}><X size={15} /></button></div><div className="budget-progress"><span className={percent >= 100 ? 'budget-over' : ''} style={{ width: `${percent}%` }} /></div><div className="budget-numbers"><span>{currency(spent)} spent</span><strong>{currency(limit)}</strong></div></article> })}</div> : <EmptyState icon={Activity} title="No budgets yet" detail="Set a category limit to track spending against your plan." action={{ label: 'Create budget', onClick: () => onCreate('budgets') }} />}</section>
       <section className="panel finance-plan-panel"><PanelHeading title="Financial goals" kicker="SAVING JOURNEY" action="Add goal" onAction={() => onCreate('goals')} />{goals.length ? <div className="finance-plan-list">{goals.map((goal) => <GoalProgress key={goal.id} goal={goal} accounts={accounts} onDelete={() => onDelete('goals', { ...goal, title: goal.title })} onContribute={onContribute} />)}</div> : <EmptyState icon={Wallet} title="No goals yet" detail="Create a goal, allocate money, and earn XP as your savings grow." action={{ label: 'Create goal', onClick: () => onCreate('goals') }} />}</section>
     </div>
-    <section className="panel finance-panel"><div className="panel-heading finance-list-heading"><div><p className="eyebrow">TRANSACTION LOG</p><h2>Income and expenses</h2></div><div className="finance-filters"><label className="search-box compact-search"><Search size={15} /><input aria-label="Search transactions" placeholder="Search..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by date</span><select value={dateRange} onChange={(event) => setDateRange(event.target.value)}><option value="all">All dates</option><option value="month">This month</option><option value="30days">Last 30 days</option></select><ChevronDown size={14} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option>{categories.map((name) => <option key={name}>{name}</option>)}</select><ChevronDown size={14} /></label><button className="button button-secondary export-button" onClick={exportTransactions} disabled={Boolean(error) || !filtered.length} title={error ? 'Transactions are unavailable' : filtered.length ? 'Download the filtered transaction history as an Excel workbook' : 'No transactions match the current filters'}><FileSpreadsheet size={15} />Download Excel</button></div></div>
+    <section className="panel finance-panel"><div className="panel-heading finance-list-heading"><div><p className="eyebrow">TRANSACTION LOG</p><h2>Income and expenses</h2></div><div className="finance-filters"><label className="search-box compact-search"><Search size={15} /><input aria-label="Search transactions" placeholder="Search..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by date</span><select value={dateRange} onChange={(event) => setDateRange(event.target.value)}><option value="all">All dates</option><option value="month">This month</option><option value="30days">Last 30 days</option></select><ChevronDown size={14} /></label><label className="select-wrap"><span className="sr-only">Filter transactions by category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option>{categories.map((name) => <option key={name}>{name}</option>)}</select><ChevronDown size={14} /></label><button className="button button-secondary export-button" onClick={exportTransactions} title="Download a workbook summary of your cloud data and the filtered transactions"><FileSpreadsheet size={15} />Cloud summary Excel</button></div></div>
       {error && <InlineError message={error} />}
       {exportError && <InlineError message={exportError} />}
       {filtered.length ? <div className="expense-table-wrap"><table className="expense-table"><thead><tr><th>DESCRIPTION</th><th>TYPE</th><th>CATEGORY</th><th>ACCOUNT</th><th>DATE</th><th>AMOUNT</th><th aria-label="Actions" /></tr></thead><tbody>{filtered.map((expense) => <tr key={expense.id}><td><span className="expense-title"><span className="expense-mark"><CreditCard size={15} /></span>{expense.title}</span></td><td><span className={`transaction-type transaction-${expense.transaction_type || 'expense'}`}>{expense.transaction_type || 'expense'}</span></td><td><span className="category-tag">{expense.category}</span></td><td>{expense.account_name || 'Unassigned'}</td><td>{friendlyDate(expense.expense_date)}</td><td className={`amount-cell ${expense.transaction_type === 'income' ? 'amount-income' : ''}`}>{expense.transaction_type === 'income' ? '+' : '-'}{currency(expense.amount)}</td><td><div className="row-actions"><button className="icon-button" title="Edit transaction" aria-label={`Edit ${expense.title}`} onClick={() => onEdit(expense)}><Settings2 size={15} /></button><button className="icon-button danger-hover" title="Delete transaction" aria-label={`Delete ${expense.title}`} onClick={() => onDelete('expenses', expense)}><X size={15} /></button></div></td></tr>)}</tbody></table></div> : <EmptyState icon={CreditCard} title={error ? 'Transactions could not be loaded' : query || category !== 'all' || dateRange !== 'all' ? 'No matching transactions' : 'No transactions recorded'} detail={error || (query || category !== 'all' || dateRange !== 'all' ? 'Try another search, category, or date range.' : 'Add income or expenses to start tracking your accounts.')} action={!error && !query && category === 'all' && dateRange === 'all' ? { label: 'Add transaction', onClick: () => onCreate('expenses') } : undefined} />}
@@ -855,12 +961,13 @@ function GoalProgress({ goal, accounts, onDelete, onContribute }) {
   return <article className="goal-row"><div className="goal-row-top"><div><strong>{goal.title}</strong><small>{goal.target_date ? `Target ${friendlyDate(goal.target_date)}` : 'No target date'}</small></div><button className="icon-button danger-hover" aria-label={`Delete ${goal.title}`} title="Delete goal" onClick={onDelete}><X size={15} /></button></div><div className="goal-progress"><span style={{ width: `${progress}%` }} /></div><div className="goal-numbers"><span>{currency(saved)} of {currency(target)}</span><strong>{Math.floor(Number(goal.xp) || 0)} XP</strong></div><div className="goal-contribute"><label className="select-wrap"><span className="sr-only">Account for contribution to {goal.title}</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={!accounts.length}><option value="">Account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select><ChevronDown size={14} /></label><input aria-label={`Contribution amount for ${goal.title}`} type="number" min="0.01" step="0.01" placeholder="Amount" value={amount} onChange={(event) => setAmount(event.target.value)} /><button className="button button-quiet small-button" disabled={!accountId || !amount} onClick={() => { onContribute(goal, accountId, amount); setAmount('') }}>Allocate</button></div></article>
 }
 
-function WorkspacePage({ tasks, notes, errors, onCreate, onEdit, onDelete, onRefresh, notify, celebrate }) {
+function WorkspacePage({ tasks, notes, diary, errors, onCreate, onEdit, onDelete, onRefresh, notify, celebrate }) {
   const [tab, setTab] = useState('tasks')
   const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')
   const filteredTasks = tasks.filter((task) => (filter === 'all' || task.status === filter) && `${task.title} ${task.description || ''}`.toLowerCase().includes(query.toLowerCase()))
   const filteredNotes = notes.filter((note) => `${note.title} ${note.content || ''}`.toLowerCase().includes(query.toLowerCase()))
+  const filteredDiary = diary.filter((entry) => `${entry.title} ${entry.content || ''}`.toLowerCase().includes(query.toLowerCase()))
 
   async function toggleTask(task) {
     try {
@@ -872,14 +979,17 @@ function WorkspacePage({ tasks, notes, errors, onCreate, onEdit, onDelete, onRef
   }
 
   return <>
-    <div className="workspace-toolbar"><div className="tabs" role="tablist" aria-label="Workspace view"><button role="tab" aria-selected={tab === 'tasks'} className={tab === 'tasks' ? 'tab-active' : ''} onClick={() => setTab('tasks')}><ListTodo size={15} />Tasks<span>{tasks.filter((task) => task.status !== 'completed').length}</span></button><button role="tab" aria-selected={tab === 'notes'} className={tab === 'notes' ? 'tab-active' : ''} onClick={() => setTab('notes')}><FileText size={15} />Notes<span>{notes.length}</span></button></div><div className="workspace-actions"><label className="search-box compact-search"><Search size={15} /><input aria-label={`Search ${tab}`} placeholder={`Search ${tab}...`} value={query} onChange={(event) => setQuery(event.target.value)} /></label><button className="button button-primary" onClick={() => onCreate(tab)}><Plus size={15} />New {tab === 'tasks' ? 'task' : 'note'}</button></div></div>
+    <div className="workspace-toolbar"><div className="tabs" role="tablist" aria-label="Workspace view"><button role="tab" aria-selected={tab === 'tasks'} className={tab === 'tasks' ? 'tab-active' : ''} onClick={() => setTab('tasks')}><ListTodo size={15} />Tasks<span>{tasks.filter((task) => task.status !== 'completed').length}</span></button><button role="tab" aria-selected={tab === 'notes'} className={tab === 'notes' ? 'tab-active' : ''} onClick={() => setTab('notes')}><FileText size={15} />Notes<span>{notes.length}</span></button><button role="tab" aria-selected={tab === 'diary'} className={tab === 'diary' ? 'tab-active' : ''} onClick={() => setTab('diary')}><BookOpen size={15} />Diary<span>{diary.length}</span></button></div><div className="workspace-actions"><label className="search-box compact-search"><Search size={15} /><input aria-label={`Search ${tab}`} placeholder={`Search ${tab}...`} value={query} onChange={(event) => setQuery(event.target.value)} /></label><button className="button button-primary" onClick={() => onCreate(tab)}><Plus size={15} />New {tab === 'tasks' ? 'task' : tab === 'notes' ? 'note' : 'diary entry'}</button></div></div>
     {tab === 'tasks' ? <>
       <div className="task-filters"><button className={filter === 'all' ? 'filter-active' : ''} onClick={() => setFilter('all')}>All tasks</button><button className={filter === 'pending' ? 'filter-active' : ''} onClick={() => setFilter('pending')}>Pending</button><button className={filter === 'in_progress' ? 'filter-active' : ''} onClick={() => setFilter('in_progress')}>In progress</button><button className={filter === 'completed' ? 'filter-active' : ''} onClick={() => setFilter('completed')}>Completed</button></div>
       {errors.tasks && <InlineError message={errors.tasks} />}
       {filteredTasks.length ? <div className="task-list">{filteredTasks.map((task) => <article className={`task-row ${task.status === 'completed' ? 'task-complete' : ''}`} key={task.id}><button className={`task-check ${task.status === 'completed' ? 'checked' : ''}`} aria-label={`${task.status === 'completed' ? 'Reopen' : 'Complete'} ${task.title}`} onClick={() => toggleTask(task)}>{task.status === 'completed' && <Check size={13} />}</button><div className="task-content"><strong>{task.title}</strong><p>{task.description || 'No details added.'}</p></div><StatusBadge status={task.status} /><span className="task-due">{task.due_date ? `Due ${friendlyDate(task.due_date)}` : 'No due date'}</span><div className="row-actions"><button className="icon-button" title="Edit task" aria-label={`Edit ${task.title}`} onClick={() => onEdit('tasks', task)}><Settings2 size={15} /></button><button className="icon-button danger-hover" title="Delete task" aria-label={`Delete ${task.title}`} onClick={() => onDelete('tasks', task)}><X size={15} /></button></div></article>)}</div> : <EmptyState icon={ListTodo} title={errors.tasks ? 'Tasks could not be loaded' : query || filter !== 'all' ? 'No matching tasks' : 'No tasks on your list'} detail={errors.tasks || 'Add a task to keep your next steps in view.'} action={!errors.tasks && !query && filter === 'all' ? { label: 'Create a task', onClick: () => onCreate('tasks') } : undefined} />}
-    </> : <>
+    </> : tab === 'notes' ? <>
       {errors.notes && <InlineError message={errors.notes} />}
       {filteredNotes.length ? <div className="notes-grid">{filteredNotes.map((note) => <article className="note-card" key={note.id}><div className="note-top"><span className="note-icon"><FileText size={16} /></span><div className="row-actions"><button className="icon-button" title="Edit note" aria-label={`Edit ${note.title}`} onClick={() => onEdit('notes', note)}><Settings2 size={15} /></button><button className="icon-button danger-hover" title="Delete note" aria-label={`Delete ${note.title}`} onClick={() => onDelete('notes', note)}><X size={15} /></button></div></div><h3>{note.title}</h3><p>{note.content || 'This note is empty.'}</p><time>{friendlyDate(note.updated_at || note.created_at)}</time></article>)}</div> : <EmptyState icon={FileText} title={errors.notes ? 'Notes could not be loaded' : query ? 'No matching notes' : 'No notes saved'} detail={errors.notes || 'Capture an idea or keep useful details close at hand.'} action={!errors.notes && !query ? { label: 'Write a note', onClick: () => onCreate('notes') } : undefined} />}
+    </> : <>
+      {errors.diary && <InlineError message={errors.diary} />}
+      {filteredDiary.length ? <div className="notes-grid">{filteredDiary.map((entry) => <article className="note-card diary-card" key={entry.id}><div className="note-top"><span className="note-icon diary-icon"><BookOpen size={16} /></span><div className="row-actions"><button className="icon-button" title="Edit diary entry" aria-label={`Edit ${entry.title}`} onClick={() => onEdit('diary', entry)}><Settings2 size={15} /></button><button className="icon-button danger-hover" title="Delete diary entry" aria-label={`Delete ${entry.title}`} onClick={() => onDelete('diary', entry)}><X size={15} /></button></div></div><h3>{entry.title}</h3><p>{entry.content || 'This diary entry is empty.'}</p><time>{friendlyDate(entry.entry_date)}</time></article>)}</div> : <EmptyState icon={BookOpen} title={errors.diary ? 'Diary could not be loaded' : query ? 'No matching diary entries' : 'Your diary is ready'} detail={errors.diary || 'Write a private entry to capture a moment, thought, or reflection.'} action={!errors.diary && !query ? { label: 'Write a diary entry', onClick: () => onCreate('diary') } : undefined} />}
     </>}
   </>
 }
@@ -888,11 +998,11 @@ function FamilyCloudPage({ files, error, familyMembers, membersError, onRefresh,
   const [category, setCategory] = useState('photo')
   const [view, setView] = useState('gallery')
   const [uploadState, setUploadState] = useState(null)
-  const [selectedPhoto, setSelectedPhoto] = useState(null)
+  const [selectedMedia, setSelectedMedia] = useState(null)
   const [inviteCode, setInviteCode] = useState('')
   const [joinCode, setJoinCode] = useState('')
   const [familyBusy, setFamilyBusy] = useState('')
-  const closePhotoPreview = useCallback(() => setSelectedPhoto(null), [])
+  const closeMediaPreview = useCallback(() => setSelectedMedia(null), [])
 
   async function createInvite() {
     setFamilyBusy('invite')
@@ -1059,7 +1169,7 @@ function FamilyCloudPage({ files, error, familyMembers, membersError, onRefresh,
               <div className="family-gallery-grid family-photo-grid">
                 {monthFiles.map((file) => (
                   <article className="family-card" key={file.id}>
-                    <FamilyPhotoPreview file={file} onPreview={() => setSelectedPhoto(file)} />
+                    <FamilyPhotoPreview file={file} onPreview={() => setSelectedMedia(file)} />
                     <div className="family-card-body">
                       <strong title={file.original_name}>{file.original_name}</strong>
                       <small>{friendlyDate(file.file_date || file.created_at)}</small>
@@ -1081,7 +1191,7 @@ function FamilyCloudPage({ files, error, familyMembers, membersError, onRefresh,
         {videoFiles.length ? <div className="family-gallery-grid">
           {videoFiles.map((file) => (
             <article className="family-card" key={file.id}>
-              <FamilyMoviePreview file={file} />
+              <FamilyMoviePreview file={file} onPreview={() => setSelectedMedia(file)} />
               <div className="family-card-body">
                 <strong>{file.original_name}</strong>
                 <small>{friendlyDate(file.file_date || file.created_at)}</small>
@@ -1098,25 +1208,23 @@ function FamilyCloudPage({ files, error, familyMembers, membersError, onRefresh,
 
       {view === 'tree' && <div className="family-tree-layout">
         {membersError && <InlineError message={membersError} />}
-        <div className="family-tree-grid">
-          {familyMembers.map((member, index) => {
-            const name = `${member.first_name} ${member.last_name}`.trim()
-            const tone = ['rose', 'amber', 'blue', 'mint', 'violet', 'gold'][index % 6]
-            return <article className={`family-node ${tone}`} key={member.id}>
-              <div className="family-node-avatar">{initials(member)}</div>
-              <strong>{name}</strong>
-              <span className="family-node-role">{member.role}</span>
-              <small>@{member.username}</small>
-              <time>{member.joined_at ? `Joined ${friendlyDate(member.joined_at)}` : 'Family member'}</time>
-            </article>
-          })}
-        </div>
+        {familyMembers.length ? <div className="family-tree-visual" aria-label="Family account sharing tree">
+          {(() => {
+            const ownerIndex = Math.max(0, familyMembers.findIndex((member) => member.role === 'owner'))
+            const root = familyMembers[ownerIndex]
+            const branches = familyMembers.filter((_, index) => index !== ownerIndex)
+            return <>
+              <div className="family-tree-root"><FamilyTreeNode member={root} index={ownerIndex} /></div>
+              {branches.length > 0 && <div className="family-tree-branches">{branches.map((member, index) => <div className="family-tree-branch" key={member.id}><FamilyTreeNode member={member} index={index + 1} /></div>)}</div>}
+            </>
+          })()}
+        </div> : <EmptyState icon={Users} title={membersError ? 'Family tree unavailable' : 'No family members yet'} detail={membersError || 'Connect another account with an invite to start your family sharing tree.'} />}
         <div className="family-tree-summary">
           <h3>{familyMembers.length ? `${familyMembers.length} connected ${familyMembers.length === 1 ? 'member' : 'members'}` : 'Your family network'}</h3>
-          <p>{familyMembers.length ? 'These are the accounts currently connected to this private family space. Family relationships can be added separately from account access.' : membersError || 'There are no connected family accounts yet.'}</p>
+          <p>{familyMembers.length ? 'The family owner is shown at the top, with connected accounts branching below. This represents shared account access, not recorded family relationships.' : 'Invite a family account to begin your shared tree.'}</p>
         </div>
       </div>}
-      {selectedPhoto && <FamilyPhotoLightbox key={selectedPhoto.id} file={selectedPhoto} onClose={closePhotoPreview} />}
+      {selectedMedia && <FamilyMediaLightbox key={selectedMedia.id} file={selectedMedia} onClose={closeMediaPreview} />}
     </section>
     {uploadState && <UploadStatusOverlay state={uploadState} />}
   </div>
@@ -1148,9 +1256,22 @@ function FamilyPhotoPreview({ file, onPreview }) {
   </button>
 }
 
-function FamilyPhotoLightbox({ file, onClose }) {
+function FamilyTreeNode({ member, index }) {
+  const tone = ['rose', 'amber', 'blue', 'mint', 'violet', 'gold'][index % 6]
+  const name = `${member.first_name} ${member.last_name}`.trim()
+  return <article className={`family-node ${tone}`}>
+    <div className="family-node-avatar">{initials(member)}</div>
+    <strong>{name}</strong>
+    <span className="family-node-role">{member.role}</span>
+    <small>@{member.username}</small>
+    <time>{member.joined_at ? `Joined ${friendlyDate(member.joined_at)}` : 'Family member'}</time>
+  </article>
+}
+
+function FamilyMediaLightbox({ file, onClose }) {
   const [src, setSrc] = useState('')
   const [failed, setFailed] = useState(false)
+  const isVideo = file.category === 'video'
 
   useEffect(() => {
     let active = true
@@ -1180,13 +1301,13 @@ function FamilyPhotoLightbox({ file, onClose }) {
   }, [onClose])
 
   return <div className="photo-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <section className="photo-lightbox-panel" role="dialog" aria-modal="true" aria-label={`Photo preview: ${file.original_name}`}>
+    <section className={`photo-lightbox-panel photo-lightbox-${isVideo ? 'video' : 'image'}`} role="dialog" aria-modal="true" aria-label={`${isVideo ? 'Video' : 'Photo'} preview: ${file.original_name}`}>
       <header className="photo-lightbox-head">
-        <div><p className="eyebrow">PHOTO PREVIEW</p><h2>{file.original_name}</h2><span>{friendlyDate(file.file_date || file.created_at)}</span></div>
-        <button className="icon-button" type="button" onClick={onClose} aria-label="Close photo preview"><X size={18} /></button>
+        <div><p className="eyebrow">{isVideo ? 'VIDEO PREVIEW' : 'PHOTO PREVIEW'}</p><h2>{file.original_name}</h2><span>{friendlyDate(file.file_date || file.created_at)}</span></div>
+        <button className="icon-button" type="button" onClick={onClose} aria-label={`Close ${isVideo ? 'video' : 'photo'} preview`}><X size={18} /></button>
       </header>
-      <div className="photo-lightbox-stage">
-        {src ? <img src={src} alt={file.original_name} /> : <div className="photo-lightbox-loading"><LoaderCircle className={failed ? '' : 'spin'} size={24} /><span>{failed ? 'Could not load this photo.' : 'Opening photo...'}</span></div>}
+      <div className={`photo-lightbox-stage photo-lightbox-${isVideo ? 'video' : 'image'}`}>
+        {src ? isVideo ? <video src={src} controls preload="metadata" aria-label={file.original_name} /> : <img src={src} alt={file.original_name} /> : <div className="photo-lightbox-loading"><LoaderCircle className={failed ? '' : 'spin'} size={24} /><span>{failed ? `Could not load this ${isVideo ? 'video' : 'photo'}.` : `Opening ${isVideo ? 'video' : 'photo'}...`}</span></div>}
       </div>
     </section>
   </div>
@@ -1210,33 +1331,11 @@ function UploadStatusOverlay({ state }) {
   </div>
 }
 
-function FamilyMoviePreview({ file }) {
-  const [src, setSrc] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => () => { if (src) URL.revokeObjectURL(src) }, [src])
-
-  async function loadMovie() {
-    setLoading(true)
-    setError('')
-    try {
-      const blob = await api.files.download(file.id)
-      setSrc(URL.createObjectURL(blob))
-    } catch (requestError) {
-      setError(requestError.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return <div className="family-card-art family-art-video">
-    {src ? <video src={src} controls preload="metadata" aria-label={file.original_name} /> : <>
-      <span className="family-card-tag">Movie</span>
-      <button className="family-movie-load" onClick={loadMovie} disabled={loading}>{loading ? 'Loading movie...' : error ? 'Try again' : 'Load movie'}</button>
-      {error && <span className="family-preview-error">{error}</span>}
-    </>}
-  </div>
+function FamilyMoviePreview({ file, onPreview }) {
+  return <button type="button" className="family-card-art family-art-video family-movie-open" onClick={onPreview} aria-label={`Preview video ${file.original_name}`}>
+    <span className="family-card-tag">Movie</span>
+    <span className="family-movie-load">Open video preview</span>
+  </button>
 }
 
 function ResourceDialog({ resource, item, categories = [], accounts = [], onClose, onSave }) {
@@ -1257,6 +1356,7 @@ function ResourceDialog({ resource, item, categories = [], accounts = [], onClos
     expenses: { title: 'Transaction', fields: [['transaction_type', 'Type', 'select', ['expense', 'income']], ['title', 'Description'], ['amount', 'Amount (KES)', 'number'], ['category', 'Category', 'select', categoryOptions.length ? categoryOptions : ['General']], ['account_id', 'Account', 'select', accounts.map((account) => account.name)], ['expense_date', 'Date', 'date'] ] },
     tasks: { title: 'Task', fields: [['title', 'Task title'], ['description', 'Description', 'textarea'], ['status', 'Status', 'select', ['pending', 'in_progress', 'completed']], ['due_date', 'Due date', 'date'] ] },
     notes: { title: 'Note', fields: [['title', 'Title'], ['content', 'Note', 'textarea'] ] },
+    diary: { title: 'Diary entry', fields: [['title', 'Entry title'], ['entry_date', 'Entry date', 'date'], ['content', 'Your entry', 'textarea'] ] },
     accounts: { title: 'Account', fields: [['name', 'Account name'], ['balance', 'Starting balance (KES)', 'number']] },
     categories: { title: 'Category', fields: [['name', 'Category name']] },
     budgets: { title: 'Budget', fields: [['category', 'Category', 'select', categoryOptions.length ? categoryOptions : ['General']], ['amount', 'Limit (KES)', 'number'], ['period', 'Period', 'select', ['daily', 'weekly', 'monthly', 'yearly']]] },
@@ -1289,7 +1389,7 @@ function ResourceDialog({ resource, item, categories = [], accounts = [], onClos
     finally { setBusy(false) }
   }
 
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><header className="modal-head"><div><p className="eyebrow">{item ? 'UPDATE RECORD' : 'NEW RECORD'}</p><h2 id="modal-title">{item ? `Edit ${schema.title.toLowerCase()}` : `Create ${schema.title.toLowerCase()}`}</h2></div><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={18} /></button></header><form onSubmit={submit}><div className="modal-fields">{schema.fields.map(([name, label, type = 'text', options]) => <label className={`field ${type === 'textarea' ? 'field-wide' : ''}`} key={name}><span>{label}</span>{type === 'textarea' ? <textarea name={name} rows={name === 'content' ? 7 : 4} maxLength={name === 'content' ? 20000 : 5000} value={form[name] || ''} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))} /> : type === 'select' ? <select name={name} value={form[name] || options[0]} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))}>{options.map((option) => <option value={option} key={option}>{option.replaceAll('_', ' ')}</option>)}</select> : <input name={name} type={type} required={name === 'title'} min={type === 'number' ? '0' : undefined} step={type === 'number' ? '0.01' : undefined} maxLength={name === 'title' ? 200 : undefined} value={form[name] || ''} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))} />}</label>)}</div>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button type="submit" className="button button-primary" disabled={busy}>{busy && <LoaderCircle size={15} className="spin" />}{busy ? 'Saving...' : item ? 'Save changes' : `Create ${schema.title.toLowerCase()}`}</button></div></form></section></div>
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><header className="modal-head"><div><p className="eyebrow">{item ? 'UPDATE RECORD' : 'NEW RECORD'}</p><h2 id="modal-title">{item ? `Edit ${schema.title.toLowerCase()}` : `Create ${schema.title.toLowerCase()}`}</h2></div><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={18} /></button></header><form onSubmit={submit}>  <div className="modal-fields">{schema.fields.map(([name, label, type = 'text', options]) => <label className={`field ${type === 'textarea' ? 'field-wide' : ''}`} key={name}><span>{label}</span>{type === 'textarea' ? <textarea name={name} rows={name === 'content' ? 7 : 4} maxLength={name === 'content' ? 20000 : 5000} value={form[name] || ''} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))} /> : type === 'select' ? <select name={name} value={form[name] || options[0]} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))}>{options.map((option) => <option value={option} key={option}>{option.replaceAll('_', ' ')}</option>)}</select> : <input name={name} type={type} required={name === 'title' || name === 'entry_date'} min={type === 'number' ? '0' : undefined} step={type === 'number' ? '0.01' : undefined} maxLength={name === 'title' ? 200 : undefined} value={form[name] || ''} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))} />}</label>)}</div>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button type="submit" className="button button-primary" disabled={busy}>{busy && <LoaderCircle size={15} className="spin" />}{busy ? 'Saving...' : item ? 'Save changes' : `Create ${schema.title.toLowerCase()}`}</button></div></form></section></div>
 }
 
 function makeInitialForm(resource, item) {
@@ -1298,6 +1398,7 @@ function makeInitialForm(resource, item) {
   if (resource === 'projects') return { status: 'active' }
   if (resource === 'tasks') return { status: 'pending' }
   if (resource === 'expenses') return { expense_date: today }
+  if (resource === 'diary') return { title: 'Diary entry', entry_date: today }
   return {}
 }
 
