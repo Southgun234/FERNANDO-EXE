@@ -487,6 +487,14 @@ function Dashboard({ user, health, healthError, initialSuccess, onLogout, onSign
   const occupationProfile = OCCUPATION_PROFILES[occupation]
 
   return <div className="app-shell" data-section={section} data-occupation={occupation.replaceAll('_', '-')}>
+    <svg className="gooey-filter-defs" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="gooey-blob-filter" x="0%" y="0%" width="100%" height="100%" colorInterpolationFilters="sRGB">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="blur" />
+          <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10" />
+        </filter>
+      </defs>
+    </svg>
     <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
       <div className="sidebar-head"><Brand /><button className="icon-button sidebar-close" aria-label="Close navigation" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
       <div className="system-state"><span className="status-dot" /><span>SYSTEM ONLINE</span><span className="system-version">v1.0.4</span></div>

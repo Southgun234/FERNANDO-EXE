@@ -120,6 +120,13 @@ const FRAGMENT_SHADER = `
   }
 `
 
+const DOTS = Array.from({ length: 13 * 13 }, (_, index) => {
+  const row = Math.floor(index / 13)
+  const column = index % 13
+  const distanceFromCenter = Math.hypot(row - 6, column - 6)
+  return { index, delay: `${Math.round(distanceFromCenter * 32)}ms` }
+})
+
 function compileShader(gl, type, source) {
   const shader = gl.createShader(type)
   if (!shader) throw new Error('Unable to allocate a WebGL shader.')
@@ -257,6 +264,17 @@ export default function GooeyScrollBanner() {
 
   return <section className="gooey-banner" ref={containerRef} aria-label="Rere Cloud welcome">
     <canvas className="gooey-banner-canvas" ref={canvasRef} aria-hidden="true" />
+    <div className="gooey-visual" aria-hidden="true">
+      <div className="gooey-blob-field">
+        <span className="gooey-blob gooey-blob-pink" />
+        <span className="gooey-blob gooey-blob-violet" />
+        <span className="gooey-blob gooey-blob-cyan" />
+        <span className="gooey-blob gooey-blob-coral" />
+      </div>
+      <div className="gooey-dot-grid">
+        {DOTS.map(({ index, delay }) => <i key={index} style={{ animationDelay: delay }} />)}
+      </div>
+    </div>
     <div className="gooey-banner-copy">
       <p className="eyebrow">YOUR SPACE, IN MOTION</p>
       <h2>Everything you care about,<br />flowing together.</h2>
