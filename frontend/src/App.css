@@ -137,6 +137,15 @@ button:disabled { cursor: wait; opacity: .65; }
 .main-footer b { padding: 0 4px; color: #42454e; }
 
 .overview-layout { display: flex; flex-direction: column; gap: 17px; animation: enter .4s ease-out both; }
+.gooey-banner { position: relative; min-height: 250px; overflow: hidden; isolation: isolate; background: radial-gradient(ellipse at 70% 55%, rgba(196, 50, 86, .23), transparent 58%), linear-gradient(115deg, #17151d, #11151d 72%); border: 1px solid rgba(255, 82, 105, .2); border-radius: var(--radius); }
+.gooey-banner::after { position: absolute; z-index: 1; inset: 0; background: linear-gradient(90deg, rgba(13, 15, 21, .94) 0%, rgba(13, 15, 21, .76) 38%, rgba(13, 15, 21, .08) 100%); content: ''; pointer-events: none; }
+.gooey-banner-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.gooey-banner-copy { position: relative; z-index: 2; display: flex; min-height: 250px; max-width: 610px; flex-direction: column; align-items: flex-start; justify-content: center; padding: 28px clamp(22px, 5vw, 58px); pointer-events: none; }
+.gooey-banner-copy .eyebrow { color: #ff8296; }
+.gooey-banner-copy h2 { margin: 11px 0 17px; color: #f5f2f5; font: 600 clamp(23px, 3vw, 37px)/1.12 var(--display); letter-spacing: -.045em; }
+.gooey-banner-hint { display: inline-flex; align-items: center; gap: 8px; color: #b7adbb; font-size: 11px; }
+.gooey-banner-hint i { display: grid; width: 22px; height: 22px; place-items: center; color: #ff8a9b; background: rgba(255, 82, 105, .1); border: 1px solid rgba(255, 82, 105, .2); border-radius: 50%; font: normal 14px var(--sans); animation: gooey-arrow-float 1.2s ease-in-out infinite; }
+@keyframes gooey-arrow-float { 50% { transform: translateY(3px); } }
 .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .stat-card { min-width: 0; padding: 15px 16px 13px; color: inherit; background: linear-gradient(140deg, #13151a, #101116); border: 1px solid var(--line); border-radius: var(--radius); text-align: left; cursor: pointer; transition: transform .16s, border-color .16s, background .16s; }
 .stat-card:hover { transform: translateY(-2px); border-color: #3a3d47; background: #15171d; }
@@ -1447,6 +1456,9 @@ body { font-size: 15px; }
 
 @media (max-width: 680px) {
   .page-content { padding: 22px 14px 30px; }
+  .gooey-banner, .gooey-banner-copy { min-height: 210px; }
+  .gooey-banner-copy { padding: 23px 20px; }
+  .gooey-banner::after { background: linear-gradient(90deg, rgba(13, 15, 21, .9), rgba(13, 15, 21, .54) 62%, rgba(13, 15, 21, .2)); }
   .page-heading h1 { font-size: 23px; line-height: 1.2; }
   .page-subtitle { font-size: 12px; }
   .button { min-height: 44px; }

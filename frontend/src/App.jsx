@@ -7,6 +7,7 @@ import {
   Terminal, Upload, Users, Wallet, X,
 } from 'lucide-react'
 import { api, clearToken, getLastActivity, getToken, IDLE_TIMEOUT_MS, saveToken, touchSession } from './services/api'
+import GooeyScrollBanner from './GooeyScrollBanner'
 import './App.css'
 
 const NAV_ITEMS = [
@@ -585,6 +586,7 @@ function Overview({ data, errors, onNavigate, onCreate, occupation = 'other' }) 
   ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 5)
 
   return <div className="overview-layout">
+    <GooeyScrollBanner />
     <section className="stats-grid" aria-label="Workspace statistics">{stats.map(({ label, value, icon: Icon, delta, color, target }) => <button className="stat-card" key={label} onClick={() => onNavigate(target)}><div className="stat-top"><span>{label}</span><span className={`stat-icon icon-${color}`}><Icon size={17} /></span></div><strong className="stat-value">{value == null ? '—' : value}</strong><span className="stat-foot">{delta || 'No records yet'}<ArrowUpRight size={13} /></span></button>)}</section>
     {Object.keys(errors).length > 0 && <InlineError message="Some overview details could not be loaded. Sections with unavailable data are marked; other workspace information is still shown." />}
     <div className="overview-focus-grid">
