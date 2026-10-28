@@ -1628,3 +1628,155 @@ body { font-size: 15px; }
 @media (prefers-reduced-motion: reduce) {
   .auth-art-orbit-one, .auth-art-orbit-two, .auth-art-core, .auth-art-card-top, .auth-art-card-bottom { animation: none; }
 }
+
+.page-content :is(
+  .panel, .stat-card, .focus-card, .progress-card, .project-card, .note-card,
+  .account-total, .account-card, .account-empty, .budget-row, .goal-row,
+  .family-card, .family-node, .quick-action, .terminal-panel,
+  .overview-detail-card, .finance-total, .finance-insight
+) {
+  --card-glow-a: var(--section-rgb);
+  --card-glow-b: 123, 92, 255;
+  position: relative;
+  isolation: isolate;
+  border-color: rgba(var(--card-glow-a), .24);
+  background-image:
+    radial-gradient(ellipse at 18% 22%, rgba(var(--card-glow-a), .23), transparent 49%),
+    radial-gradient(ellipse at 86% 82%, rgba(var(--card-glow-b), .19), transparent 48%),
+    linear-gradient(145deg, rgba(20, 24, 34, .97), rgba(13, 16, 24, .98));
+  background-size: 170% 170%, 170% 170%, 100% 100%;
+}
+
+.page-content :is(
+  .panel, .note-card, .account-total, .account-card, .account-empty,
+  .budget-row, .goal-row, .family-card, .family-node, .quick-action,
+  .terminal-panel, .overview-detail-card, .finance-total, .finance-insight
+)::before,
+.page-content :is(.stat-card, .focus-card, .progress-card, .project-card)::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 28% 32%, rgba(var(--card-glow-a), .38), transparent 42%),
+    radial-gradient(ellipse at 75% 69%, rgba(var(--card-glow-b), .3), transparent 45%);
+  content: '';
+  opacity: .62;
+  pointer-events: none;
+  animation: card-gooey-drift 9s ease-in-out infinite alternate;
+  transition: opacity .35s ease;
+}
+
+.page-content :is(.panel, .stat-card, .focus-card, .progress-card, .project-card, .note-card,
+  .account-total, .account-card, .account-empty, .budget-row, .goal-row,
+  .family-card, .family-node, .quick-action, .terminal-panel,
+  .overview-detail-card, .finance-total, .finance-insight):nth-child(4n + 2) {
+  --card-glow-a: 76, 195, 255;
+  --card-glow-b: 189, 91, 255;
+}
+
+.page-content :is(.panel, .stat-card, .focus-card, .progress-card, .project-card, .note-card,
+  .account-total, .account-card, .account-empty, .budget-row, .goal-row,
+  .family-card, .family-node, .quick-action, .terminal-panel,
+  .overview-detail-card, .finance-total, .finance-insight):nth-child(4n + 3) {
+  --card-glow-a: 255, 184, 82;
+  --card-glow-b: 255, 91, 153;
+}
+
+.page-content :is(.panel, .stat-card, .focus-card, .progress-card, .project-card, .note-card,
+  .account-total, .account-card, .account-empty, .budget-row, .goal-row,
+  .family-card, .family-node, .quick-action, .terminal-panel,
+  .overview-detail-card, .finance-total, .finance-insight):nth-child(4n) {
+  --card-glow-a: 67, 225, 190;
+  --card-glow-b: 91, 148, 255;
+}
+
+.page-content :is(.panel, .stat-card, .focus-card, .progress-card, .project-card, .note-card,
+  .account-total, .account-card, .account-empty, .budget-row, .goal-row,
+  .family-card, .family-node, .quick-action, .terminal-panel,
+  .overview-detail-card, .finance-total, .finance-insight):hover {
+  border-color: rgba(var(--card-glow-a), .56);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, .24), 0 0 28px rgba(var(--card-glow-a), .11);
+}
+
+.page-content :is(
+  .panel, .note-card, .account-total, .account-card, .account-empty,
+  .budget-row, .goal-row, .family-card, .family-node, .quick-action,
+  .terminal-panel, .overview-detail-card, .finance-total, .finance-insight
+):hover::before,
+.page-content :is(.stat-card, .focus-card, .progress-card, .project-card):hover::after {
+  opacity: .95;
+}
+
+.auth-art-card {
+  --card-glow-a: 133, 109, 255;
+  --card-glow-b: 74, 207, 183;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.auth-art-card::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 25% 35%, rgba(var(--card-glow-a), .38), transparent 48%),
+    radial-gradient(ellipse at 78% 68%, rgba(var(--card-glow-b), .3), transparent 46%);
+  content: '';
+  opacity: .72;
+  pointer-events: none;
+  animation: card-gooey-drift 9s ease-in-out infinite alternate;
+}
+
+@keyframes card-gooey-drift {
+  from { transform: translate(-2%, -2%) scale(.96) rotate(-2deg); }
+  to { transform: translate(3%, 2%) scale(1.06) rotate(3deg); }
+}
+
+.page-content .cloud-stat {
+  --card-glow-a: var(--section-rgb);
+  --card-glow-b: 123, 92, 255;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-color: rgba(var(--card-glow-a), .24);
+  background-image:
+    radial-gradient(ellipse at 18% 22%, rgba(var(--card-glow-a), .23), transparent 49%),
+    radial-gradient(ellipse at 86% 82%, rgba(var(--card-glow-b), .19), transparent 48%),
+    linear-gradient(145deg, rgba(20, 24, 34, .97), rgba(13, 16, 24, .98));
+}
+
+.page-content .cloud-stat::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 28% 32%, rgba(var(--card-glow-a), .38), transparent 42%),
+    radial-gradient(ellipse at 75% 69%, rgba(var(--card-glow-b), .3), transparent 45%);
+  content: '';
+  opacity: .62;
+  pointer-events: none;
+  animation: card-gooey-drift 9s ease-in-out infinite alternate;
+  transition: opacity .35s ease;
+}
+
+.page-content .cloud-stat:nth-child(4n + 2) { --card-glow-a: 76, 195, 255; --card-glow-b: 189, 91, 255; }
+.page-content .cloud-stat:nth-child(4n + 3) { --card-glow-a: 255, 184, 82; --card-glow-b: 255, 91, 153; }
+.page-content .cloud-stat:nth-child(4n) { --card-glow-a: 67, 225, 190; --card-glow-b: 91, 148, 255; }
+.page-content .cloud-stat:hover { border-color: rgba(var(--card-glow-a), .56); box-shadow: 0 0 24px rgba(var(--card-glow-a), .11); }
+.page-content .cloud-stat:hover::before { opacity: .95; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-content :is(.panel, .stat-card, .focus-card, .progress-card, .project-card, .note-card,
+    .account-total, .account-card, .account-empty, .budget-row, .goal-row,
+    .family-card, .family-node, .quick-action, .terminal-panel,
+    .overview-detail-card, .finance-total, .finance-insight)::before,
+  .page-content :is(.stat-card, .focus-card, .progress-card, .project-card)::after,
+  .page-content .cloud-stat::before,
+  .auth-art-card::before {
+    animation: none;
+    transform: none;
+  }
+}
